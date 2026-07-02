@@ -1,6 +1,6 @@
-# ENTRAIN TradJS Server v0.4
+# ENTRAIN TradJS Server v0.5
 
-Server-backed ENTRAIN with a first-class **pattern format**, database-backed **ready brainwave soundtracks**, a free editor, wallet-saved private library, and Phantom/SPL-token gates for prepared rows.
+Server-backed ENTRAIN with a first-class **pattern format**, database-backed **ready brainwave soundtracks**, a free editor, wallet-saved private library, Phantom/SPL-token gates, and a publish-time protocol analyzer.
 
 ## Stack
 
@@ -24,35 +24,48 @@ Open `http://localhost:3000`.
 
 ## Product model
 
-The product unit is no longer a vague “template.” It is a **playable pattern row**:
+The product unit is a **playable pattern row**:
 
 ```txt
-soundtrack row = public metadata + minTokens gate + entrain.session.v1 JSON
+soundtrack row = public metadata + minTokens gate + entrain.session.v1 JSON + analysis/safety metadata
 saved session row = wallet owner + private metadata + entrain.session.v1 JSON
 ```
 
 The browser player understands the same `entrain.session.v1` object everywhere:
 
 - `/studio` creates and plays custom tracks for free.
-- `/studio` can export JSON, share a URL hash, and render WAV locally without login.
+- `/studio` can export JSON, compact pattern text, share a URL hash, and render WAV locally without login.
 - Saving to `/library` requires Phantom authorization, but does not require a token threshold.
 - `/soundtracks` lists prepared database rows as ready brainwave soundtracks.
 - `/soundtracks/[slug]` can play continuously, render an exact length, render N repetitions, clone to editor, or clone into the private library.
 - Gated prepared rows require `wallet.balance >= row.minTokens` before the server returns playable session JSON.
 - `/admin` manages prepared soundtrack rows and can publish/draft/archive them.
 
-## What is new in v0.4
+## What is new in v0.5
 
-- Added `src/lib/soundtracks.ts` as the semantic layer over legacy `templates` storage.
-- Added `src/lib/access-policy.ts` so play/export/clone/library gates use one policy instead of scattered checks.
-- Added `/api/me` for wallet entitlement state.
-- Added `/api/soundtracks/[slug]` for public metadata and access preview.
-- Added `/api/soundtracks/[slug]/clone` for server-side private cloning after both wallet and token access checks.
-- Added private library update/delete endpoints: `/api/sessions/[id]`.
-- Library UI now supports favorite/unfavorite and delete.
-- Admin rows now carry `status`, `formatVersion`, and `patternHash` fields.
-- Soundtrack cards/details now show derived pattern stats: duration, layer count, bands, sample layers, pan motion, and crossfade-loop flags.
-- Format helpers now expose `summarizeSession`, `bandForHz`, `sessionNeedsLocalFiles`, and `publicSessionCopy`.
+- Added `src/format/protocol-analyzer.ts`.
+  - Flags binaural layers that need headphones.
+  - Warns/errors on binaural fusion ceiling violations above 30 Hz.
+  - Warns on questionable binaural carrier ranges.
+  - Estimates peak/RMS headroom before the limiter.
+  - Detects local ambience files and native sample-loop click risk.
+  - Scans public copy for medical/guaranteed/supernatural claim-risk terms.
+- Added session-level loop semantics:
+  - `hold-last` for descents.
+  - `repeat` for short cyclic patterns.
+  - `crossfade-repeat` metadata for loop-oriented soundtracks.
+- Added serializable procedural ambience layers:
+  - `rain`
+  - `pink-rain`
+  - `brown-room`
+  - `bowl-drone`
+- Added compact pattern text import/export in Studio for power-user/admin authoring.
+- Admin publish pipeline now blocks publishing if the analyzer finds hard protocol errors or risky public claims. Draft saves are still allowed.
+- Prepared rows now store analysis/safety metadata, evidence level, headphone requirement, default loop mode, and default export length.
+- Seed soundtracks were renamed away from commercial-template framing into product-ready names:
+  - `Mind Awake Body Rest`
+  - `Expanded Awareness Stack`
+  - `Deep Descent 60`
 
 ## Database tables
 
@@ -75,14 +88,17 @@ A production migration can rename `templates` to `soundtracks`; the app layer al
   durationMin: number,
   description?: string,
   notes?: string,
+  loop?: { mode: 'repeat' | 'hold-last' | 'crossfade-repeat', crossfadeSec?: number },
   export?: { fadeSec?: number, sampleRate?: 32000 | 44100 | 48000 },
   layers: [
     {
       id: string,
-      type: 'binaural' | 'monaural' | 'iso-smooth' | 'iso-hard' | 'carrier' | 'noise' | 'sample',
+      type: 'binaural' | 'monaural' | 'iso-smooth' | 'iso-hard' | 'carrier' | 'noise' | 'sample' | 'procedural-ambience',
       carrierHz?: number,
       wave?: 'sine' | 'triangle' | 'sawtooth',
       noiseColor?: 'white' | 'pink' | 'brown',
+      ambienceRecipe?: 'rain' | 'pink-rain' | 'brown-room' | 'bowl-drone',
+      seed?: number,
       pan?: number,
       panMotion?: { rateHz: number, depth: number },
       sampleName?: string,
@@ -94,6 +110,21 @@ A production migration can rename `templates` to `soundtracks`; the app layer al
 ```
 
 Binaural layers intentionally ignore pan and pan motion. Panning them would bleed each ear’s carrier into the other and break the interaural offset that creates the beat.
+
+## Compact pattern text
+
+Studio can copy/import a lightweight authoring format:
+
+```txt
+name "Mind Awake Body Rest"
+duration 35m
+loop hold-last
+binaural carrier=100 beat=1.5 gain=-34dB
+binaural carrier=200 beat=4 gain=-36dB
+ambience recipe=pink-rain gain=-18dB seed=1010
+```
+
+The canonical stored format remains `entrain.session.v1` JSON.
 
 ## Token gates
 
@@ -107,10 +138,15 @@ Set `ALLOW_DEV_UNLOCK=1` in `.env` for local UI work without a token balance.
 2. Click **Admin draft**.
 3. Open `/admin` and click **Use current editor session**.
 4. Add slug, title, description, tags, token gate, and status.
-5. Save as draft or publish.
+5. Review the analyzer card.
+6. Save as draft or publish.
+
+Publishing is blocked when hard protocol errors or claim-risk terms are present. Save as draft while iterating.
 
 For production, replace the `ADMIN_TOKEN` scaffold with a wallet-role or server-side admin-account check.
 
 ## Ambience files
 
 Ambience files are decoded into runtime-only `AudioBuffer`s. JSON, saved sessions, and share URLs preserve filenames and loop settings only. After loading a shared/saved session, reload the local audio file before playback/export.
+
+Use procedural ambience layers for prepared soundtracks that must be fully portable without external audio assets.

@@ -1,1 +1,3 @@
-export default function mount(){ return () => {}; }
+export default function mount() {
+  return () => {};
+}

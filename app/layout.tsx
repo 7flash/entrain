@@ -1,4 +1,4 @@
-import './globals.css';
+import "./globals.css";
 
 export default function RootLayout({ children }: { children: any }) {
   return (
@@ -11,7 +11,9 @@ export default function RootLayout({ children }: { children: any }) {
       <body>
         <div className="wrap">
           <nav className="nav">
-            <a className="brand" href="/">ENTRAIN<b>·studio</b></a>
+            <a className="brand" href="/">
+              ENTRAIN<b>·studio</b>
+            </a>
             <div className="navlinks">
               <a href="/soundtracks">Soundtracks</a>
               <a href="/studio">Create</a>
