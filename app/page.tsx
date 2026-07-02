@@ -1,7 +1,7 @@
-import { featuredTemplates } from '@/lib/templates';
+import { featuredSoundtracks } from '@/lib/soundtracks';
 
 export default function HomePage() {
-  const featured = featuredTemplates(3);
+  const featured = featuredSoundtracks(3);
   return (
     <main>
       <section className="hero">
@@ -36,6 +36,7 @@ export default function HomePage() {
               <div className="tagrow"><span className="pill">{t.category}</span><span className={`pill tier-${t.tier}`}>{t.tier}</span><span className="pill">{t.minTokens ? `${t.minTokens} $ENTRAIN` : 'free'}</span></div>
               <h3>{t.title}</h3>
               <p className="muted">{t.summary}</p>
+              <p className="small">{t.summaryStats.durationMin}m · {t.summaryStats.layerCount} layers · {t.summaryStats.bands.join('/') || 'bed'}</p>
               <a className="btn" href={`/soundtracks/${t.slug}`}>Open soundtrack</a>
             </article>
           ))}

@@ -2,7 +2,7 @@ import { db } from '@/lib/db';
 import { ADMIN_TOKEN } from '@/lib/config';
 import { sanitizeSession } from '@/format/entrain-format';
 import { json, readJson } from '@/lib/http';
-import { tierForMinTokens } from '@/lib/templates';
+import { tierForMinTokens, patternHash } from '@/lib/templates';
 
 type Body = {
   adminToken?: string;
@@ -18,6 +18,7 @@ type Body = {
   session?: any;
   sortOrder?: number;
   isPublished?: boolean;
+  status?: 'draft' | 'published' | 'archived';
 };
 
 function isAdmin(req: Request, body?: Body | null) {
@@ -61,7 +62,10 @@ export async function POST(req: Request) {
     unlockNote: String(body?.unlockNote || '').slice(0,1000),
     session,
     sortOrder: Number(body?.sortOrder || 0),
-    isPublished: body?.isPublished !== false,
+    isPublished: body?.isPublished !== false && body?.status !== 'draft' && body?.status !== 'archived',
+    status: body?.status || (body?.isPublished === false ? 'draft' : 'published'),
+    formatVersion: 'entrain.session.v1',
+    patternHash: patternHash(session),
   };
   const existing = db.templates.select().where({ slug }).first() as any;
   if (existing) db.templates.update(row).where({ slug }).run();

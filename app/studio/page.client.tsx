@@ -58,7 +58,7 @@ function App() {
   );
 }
 
-function LayerCard({ l, index }: { l: EntrainLayerV1; index: number }) {
+function LayerCard({ l, index }: { l: EntrainLayerV1; index: number; key?: string }) {
   const missingSample = l.type === 'sample' && !engine.hasSample(l.id);
   return <div className="layer">
     <div className="layer-head">

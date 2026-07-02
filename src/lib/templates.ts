@@ -1,5 +1,5 @@
 import type { EntrainTemplateV1, EntrainSessionV1, TemplateTier } from '@/format/entrain-format';
-import { sanitizeSession } from '@/format/entrain-format';
+import { sanitizeSession, summarizeSession } from '@/format/entrain-format';
 import { db } from './db';
 import { dbMeasure } from './measure';
 
@@ -117,6 +117,9 @@ function rowFromTemplate(template: EntrainTemplateV1, sortOrder: number) {
     session: template.session,
     sortOrder,
     isPublished: true,
+    status: 'published',
+    formatVersion: 'entrain.session.v1',
+    patternHash: patternHash(template.session),
   };
 }
 
@@ -171,4 +174,20 @@ function normalizeTemplate(row: any): EntrainTemplateV1 {
     unlockNote: row.unlockNote || undefined,
     session: sanitizeSession(row.session),
   };
+}
+
+
+export function soundtrackSummary(slug: string) {
+  const template = findTemplate(slug);
+  return template ? summarizeSession(template.session) : null;
+}
+
+export function patternHash(session: EntrainSessionV1) {
+  const json = JSON.stringify(sanitizeSession(session));
+  let h = 2166136261;
+  for (let i = 0; i < json.length; i++) {
+    h ^= json.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
 }

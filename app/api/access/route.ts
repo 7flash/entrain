@@ -1,23 +1,15 @@
-import { findTemplate } from '@/lib/templates';
-import { cookieValue, json } from '@/lib/http';
-import { getAuthSession } from '@/lib/auth';
+import { findSoundtrack } from '@/lib/soundtracks';
+import { accessJson, authFromRequest, decideSoundtrackAccess } from '@/lib/access-policy';
+import { db } from '@/lib/db';
 
 export function GET(req: Request) {
   const url = new URL(req.url);
   const slug = url.searchParams.get('slug') || '';
-  const template = findTemplate(slug);
-  if (!template) return json({ ok: false, error: 'template not found' }, { status: 404 });
-  const auth = getAuthSession(cookieValue(req));
-  const balance = Number(auth?.balance || 0);
-  const unlocked = template.minTokens <= 0 || balance >= template.minTokens;
-  if (!unlocked) return json({
-    ok: false,
-    requiresWallet: !auth,
-    staleBalance: !!auth,
-    error: `Requires ${template.minTokens} $ENTRAIN`,
-    minTokens: template.minTokens,
-    balance,
-    tier: template.tier,
-  }, { status: 403 });
-  return json({ ok: true, template, wallet: auth });
+  const action = (url.searchParams.get('action') || 'play') as any;
+  const soundtrack = findSoundtrack(slug);
+  const auth = authFromRequest(req);
+  const decision = decideSoundtrackAccess(soundtrack, auth, action);
+  if (!decision.ok) return accessJson(decision, { tier: soundtrack?.tier, summaryStats: soundtrack?.summaryStats });
+  try { db.playEvents.insert({ publicKey: auth?.publicKey, soundtrackSlug: slug, action: `access:${action}`, createdAt: Date.now() }); } catch {}
+  return accessJson(decision, { template: soundtrack, soundtrack, wallet: auth });
 }

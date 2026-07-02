@@ -52,16 +52,16 @@ function App() {
 async function unlock() {
   busy = true; message = 'checking access…'; paint();
   try {
-    let res = await fetch(`/api/access?slug=${encodeURIComponent(slug)}`).then((r) => r.json());
+    let res = await fetch(`/api/access?slug=${encodeURIComponent(slug)}&action=play`).then((r) => r.json());
     if (!res.ok && res.requiresWallet) {
       message = 'connect Phantom and sign to unlock…'; paint();
       wallet = await connectAndVerify();
-      res = await fetch(`/api/access?slug=${encodeURIComponent(slug)}`).then((r) => r.json());
+      res = await fetch(`/api/access?slug=${encodeURIComponent(slug)}&action=play`).then((r) => r.json());
     }
     if (!res.ok && res.staleBalance) {
       message = 'refreshing token balance…'; paint();
       wallet = await refreshWalletBalance();
-      res = await fetch(`/api/access?slug=${encodeURIComponent(slug)}`).then((r) => r.json());
+      res = await fetch(`/api/access?slug=${encodeURIComponent(slug)}&action=play`).then((r) => r.json());
     }
     if (!res.ok) throw new Error(res.error || 'locked');
     session = sanitizeSession(res.template.session);
@@ -116,22 +116,17 @@ function cloneToEditor() {
 
 async function saveToLibrary() {
   if (!session) return;
-  const copy = sanitizeSession({ ...session, name: `${session.name} — clone` });
   busy = true; message = 'saving private clone…'; paint();
   try {
-    let res = await postSession(copy);
-    if (!res.ok && res.error && /wallet/i.test(res.error)) {
+    let res = await fetch(`/api/soundtracks/${encodeURIComponent(slug)}/clone`, { method:'POST' }).then(r=>r.json());
+    if (!res.ok && /wallet/i.test(res.error || '')) {
       wallet = await connectAndVerify();
-      res = await postSession(copy);
+      res = await fetch(`/api/soundtracks/${encodeURIComponent(slug)}/clone`, { method:'POST' }).then(r=>r.json());
     }
     if (!res.ok) throw new Error(res.error || 'save failed');
     message = 'saved private clone. Open it from your library.';
   } catch(e:any) { message = e.message || 'save failed'; }
   busy = false; paint();
-}
-
-async function postSession(s: EntrainSessionV1) {
-  return await fetch('/api/sessions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:s.name,slug,session:s})}).then(r=>r.json());
 }
 function downloadBlob(blob: Blob, filename: string) { const a=document.createElement('a'); const url=URL.createObjectURL(blob); a.href=url; a.download=filename; a.click(); setTimeout(()=>URL.revokeObjectURL(url),60000); }
 function paint(){ render(<App />, document.getElementById('soundtrack-player-root')!); }

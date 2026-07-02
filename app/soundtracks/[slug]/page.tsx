@@ -1,4 +1,4 @@
-import { findTemplate } from '@/lib/templates';
+import { findSoundtrack } from '@/lib/soundtracks';
 
 const layerName = (l: any) => {
   if (l.type === 'sample') return `${l.type} · ${l.sampleName || 'local file'} · ${l.sampleLoop?.mode || 'native'} loop`;
@@ -12,7 +12,7 @@ const layerName = (l: any) => {
 type Props = { params: { slug: string } };
 
 export default function SoundtrackDetailPage({ params }: Props) {
-  const template = findTemplate(params.slug);
+  const template = findSoundtrack(params.slug);
   if (!template) {
     return <main className="hero"><h1>Soundtrack not found</h1><p><a href="/soundtracks">Back to soundtracks</a></p></main>;
   }
@@ -43,6 +43,7 @@ export default function SoundtrackDetailPage({ params }: Props) {
         <article className="card">
           <h3>Soundtrack structure</h3>
           <p className="small">Pattern length: {template.session.durationMin} minutes · {template.session.layers.length} layers · fade {template.session.export?.fadeSec ?? 4}s</p>
+          <p className="small">Bands: {template.summaryStats.bands.join(' / ') || 'bed'} · beat layers {template.summaryStats.beatLayerCount} · sample layers {template.summaryStats.sampleLayerCount}{template.summaryStats.hasCrossfadedSamples ? ' · crossfade loops' : ''}</p>
           <table className="matrix">
             <thead><tr><th>Layer</th><th>Timeline</th></tr></thead>
             <tbody>{template.session.layers.map((l) => <tr key={l.id}><td>{layerName(l)}</td><td>{l.keyframes.map((k:any)=>`${k.tMin}m:${k.beatHz ? `${k.beatHz}Hz/` : ''}${k.gainPct}%`).join(' → ')}</td></tr>)}</tbody>

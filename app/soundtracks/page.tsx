@@ -1,7 +1,7 @@
-import { templatesByCategory } from '@/lib/templates';
+import { soundtracksByCategory } from '@/lib/soundtracks';
 
 export default function SoundtracksPage() {
-  const groups = templatesByCategory();
+  const groups = soundtracksByCategory();
   return (
     <main>
       <section className="hero" style={{ paddingBottom: '10px' }}>
@@ -25,6 +25,7 @@ export default function SoundtracksPage() {
                 </div>
                 <h3>{t.title}</h3>
                 <p className="muted">{t.summary}</p>
+                <p className="small">{t.summaryStats.durationMin}m · {t.summaryStats.layerCount} layers · {t.summaryStats.bands.join('/') || 'bed'}{t.summaryStats.hasPanMotion ? ' · pan motion' : ''}{t.summaryStats.sampleLayerCount ? ` · ${t.summaryStats.sampleLayerCount} sample` : ''}</p>
                 <p className="small">{t.tags.join(' · ')}</p>
                 <div style={{ marginTop: 'auto' }}><a className="btn" href={`/soundtracks/${t.slug}`}>Open</a></div>
               </article>

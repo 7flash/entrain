@@ -1,6 +1,6 @@
-import { allTemplates, templatesByCategory } from '@/lib/templates';
+import { allSoundtracks, soundtracksByCategory } from '@/lib/soundtracks';
 import { json } from '@/lib/http';
 
 export function GET() {
-  return json({ ok: true, soundtracks: allTemplates().map(({ session, ...meta }) => meta), groups: templatesByCategory().map((g) => ({ category: g.category, count: g.templates.length })) });
+  return json({ ok: true, soundtracks: allSoundtracks().map(({ session, ...meta }) => meta), groups: soundtracksByCategory().map((g) => ({ category: g.category, count: g.templates.length })) });
 }

@@ -11,7 +11,7 @@ function freshRow() {
   const session = defaultSession();
   return {
     slug: 'new-soundtrack', title: session.name, summary: '', description: '', category: 'custom',
-    tags: 'custom', minTokens: 0, unlockNote: '', sortOrder: 100, isPublished: true,
+    tags: 'custom', minTokens: 0, unlockNote: '', sortOrder: 100, isPublished: true, status: 'published',
     sessionText: JSON.stringify(session, null, 2),
   };
 }
@@ -35,7 +35,7 @@ function App() {
         <div className="list">
           {rows.map((r)=><button className="preset btn" style={{ textAlign:'left', display:'block' }} key={r.slug} onClick={()=>editRow(r)}>
             <strong>{r.title}</strong><br />
-            <span className="small">/{r.slug} · {r.minTokens ? `${r.minTokens} tokens` : 'free'} · {r.isPublished ? 'published' : 'draft'}</span>
+            <span className="small">/{r.slug} · {r.minTokens ? `${r.minTokens} tokens` : 'free'} · {r.status || (r.isPublished ? 'published' : 'draft')}</span>
           </button>)}
         </div>
       </aside>
@@ -47,6 +47,7 @@ function App() {
           <Field label="Minimum $ENTRAIN"><input type="number" min="0" value={String(selected.minTokens)} onInput={(e:any)=>{selected.minTokens=Number(e.currentTarget.value||0); paint();}} /></Field>
           <Field label="Tags, comma separated"><input value={selected.tags} onInput={(e:any)=>{selected.tags=e.currentTarget.value; paint();}} /></Field>
           <Field label="Sort order"><input type="number" value={String(selected.sortOrder)} onInput={(e:any)=>{selected.sortOrder=Number(e.currentTarget.value||0); paint();}} /></Field>
+          <Field label="Status"><select value={selected.status || (selected.isPublished ? 'published' : 'draft')} onChange={(e:any)=>{selected.status=e.currentTarget.value; selected.isPublished=e.currentTarget.value==='published'; paint();}}><option value="draft">draft</option><option value="published">published</option><option value="archived">archived</option></select></Field>
         </div>
         <Field label="Summary"><textarea rows={2} value={selected.summary} onInput={(e:any)=>{selected.summary=e.currentTarget.value; paint();}} /></Field>
         <Field label="Description"><textarea rows={4} value={selected.description} onInput={(e:any)=>{selected.description=e.currentTarget.value; paint();}} /></Field>

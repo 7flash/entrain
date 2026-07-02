@@ -145,3 +145,69 @@ export function cleanForShare(session: EntrainSessionV1) {
   s.layers = s.layers.map((l) => ({ ...l, sampleName: l.sampleName || undefined }));
   return s;
 }
+
+export type SoundtrackAccessTier = TemplateTier;
+
+export type EntrainSoundtrackV1 = {
+  format: 'entrain.soundtrack.v1';
+  slug: string;
+  title: string;
+  summary: string;
+  description: string;
+  category: string;
+  tier: SoundtrackAccessTier;
+  tags: string[];
+  minTokens: number;
+  unlockNote?: string;
+  session: EntrainSessionV1;
+  status?: 'draft' | 'published' | 'archived';
+};
+
+export type SessionSummary = {
+  durationMin: number;
+  layerCount: number;
+  beatLayerCount: number;
+  sampleLayerCount: number;
+  bands: string[];
+  hasPanMotion: boolean;
+  hasCrossfadedSamples: boolean;
+};
+
+export function summarizeSession(input: any): SessionSummary {
+  const s = sanitizeSession(input);
+  const bands = new Set<string>();
+  let beatLayerCount = 0;
+  let sampleLayerCount = 0;
+  let hasPanMotion = false;
+  let hasCrossfadedSamples = false;
+  for (const layer of s.layers) {
+    if (layer.type !== 'noise' && layer.type !== 'carrier' && layer.type !== 'sample') {
+      beatLayerCount++;
+      for (const k of layer.keyframes) if (typeof k.beatHz === 'number') bands.add(bandForHz(k.beatHz));
+    }
+    if (layer.type === 'sample') {
+      sampleLayerCount++;
+      if (layer.sampleLoop?.mode === 'crossfade') hasCrossfadedSamples = true;
+    }
+    if ((layer.panMotion?.rateHz || 0) > 0) hasPanMotion = true;
+  }
+  return { durationMin: s.durationMin, layerCount: s.layers.length, beatLayerCount, sampleLayerCount, bands: [...bands], hasPanMotion, hasCrossfadedSamples };
+}
+
+export function bandForHz(hz: number) {
+  if (hz < 4) return 'delta';
+  if (hz < 8) return 'theta';
+  if (hz < 13) return 'alpha';
+  if (hz < 30) return 'beta';
+  return 'gamma';
+}
+
+export function sessionNeedsLocalFiles(input: any) {
+  return sanitizeSession(input).layers.some((layer) => layer.type === 'sample');
+}
+
+export function publicSessionCopy(input: any) {
+  const s = sanitizeSession(input);
+  s.layers = s.layers.map((layer) => layer.type === 'sample' ? { ...layer, sampleName: layer.sampleName || 'reload local audio file' } : layer);
+  return s;
+}

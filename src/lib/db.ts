@@ -15,6 +15,11 @@ export const db = new Database(process.env.DB_PATH || 'entrain.db', {
     session: z.any(),
     sortOrder: z.number().default(0),
     isPublished: z.boolean().default(true),
+    status: z.string().default('published'),
+    formatVersion: z.string().default('entrain.session.v1'),
+    patternHash: z.string().optional(),
+    createdBy: z.string().optional(),
+    updatedBy: z.string().optional(),
   }),
   walletChallenges: z.object({
     publicKey: z.string(),
@@ -33,10 +38,22 @@ export const db = new Database(process.env.DB_PATH || 'entrain.db', {
   savedSessions: z.object({
     publicKey: z.string(),
     slug: z.string(),
+    sourceSlug: z.string().optional(),
     name: z.string(),
+    description: z.string().optional(),
+    tags: z.array(z.string()).default([]),
     session: z.any(),
+    isFavorite: z.boolean().default(false),
+    lastPlayedAt: z.number().optional(),
     createdAt: z.number(),
     updatedAt: z.number().optional(),
+  }),
+  playEvents: z.object({
+    publicKey: z.string().optional(),
+    soundtrackSlug: z.string().optional(),
+    savedSessionId: z.number().optional(),
+    action: z.string(),
+    createdAt: z.number(),
   }),
 }, {
   timestamps: true,
@@ -57,4 +74,7 @@ export type TemplateRow = {
   session: EntrainSessionV1;
   sortOrder: number;
   isPublished: boolean;
+  status?: string;
+  formatVersion?: string;
+  patternHash?: string;
 };
