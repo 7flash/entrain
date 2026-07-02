@@ -1,6 +1,6 @@
 {
   "name": "entrain-tradjs-server",
-  "version": "0.5.0",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,6 +8,7 @@
     "build": "tradjs build",
     "start": "tradjs serve 3000",
     "seed": "bun run src/lib/seed.ts",
+    "sync:soundtracks": "bun run src/lib/sync-soundtracks.ts --upsert",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

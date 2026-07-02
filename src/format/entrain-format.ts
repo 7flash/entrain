@@ -55,6 +55,9 @@ export type EntrainSessionV1 = {
   notes?: string;
 };
 
+export type ProtocolLineageV1 =
+  import("./protocol-reference").ProtocolLineageV1;
+
 export type EntrainTemplateV1 = {
   format: "entrain.template.v1";
   slug: string;
@@ -68,6 +71,7 @@ export type EntrainTemplateV1 = {
   unlockNote?: string;
   session: EntrainSessionV1;
   evidenceLevel?: "experimental" | "relaxation" | "focus" | "sleep-support";
+  lineage?: ProtocolLineageV1;
 };
 
 function rid(prefix = "layer") {

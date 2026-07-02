@@ -31,6 +31,8 @@ export default function SoundtrackDetailPage({ params }: Props) {
     ? `${template.minTokens} $ENTRAIN required`
     : "Free soundtrack";
   const analysis = analyzeSession(template.session);
+  const lineage = template.lineage;
+  const ref = template.referenceMatch;
   return (
     <main>
       <section className="hero">
@@ -85,6 +87,46 @@ export default function SoundtrackDetailPage({ params }: Props) {
               </ul>
             ) : null}
           </div>
+          {lineage ? (
+            <div className="notice">
+              <strong>Lineage: {lineage.accuracy || "inspired"}</strong>
+              <br />
+              <span className="small">
+                {lineage.sourceLabel || "Source metadata declared by publisher"}
+                {lineage.referenceId
+                  ? ` · reference ${lineage.referenceId}`
+                  : ""}
+              </span>
+              {lineage.disclosure ? (
+                <p className="small">{lineage.disclosure}</p>
+              ) : null}
+              {lineage.intentionalDifferences?.length ? (
+                <ul className="small">
+                  {lineage.intentionalDifferences.map((d) => (
+                    <li key={d}>{d}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {ref ? (
+                <p className="small">
+                  <b>Reference check:</b>{" "}
+                  {ref.matches
+                    ? "matches declared reference"
+                    : "differs from declared reference"}{" "}
+                  · score {ref.score}/100
+                </p>
+              ) : null}
+              {ref?.deviations.length ? (
+                <ul className="small">
+                  {ref.deviations.slice(0, 6).map((d) => (
+                    <li key={d.code + d.message}>
+                      {d.level}: {d.message}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          ) : null}
           <div
             id="soundtrack-player-root"
             data-slug={template.slug}

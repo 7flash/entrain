@@ -45,6 +45,9 @@ export default function SoundtracksPage() {
                   <span className={t.minTokens ? "pill gate" : "pill unlocked"}>
                     {t.minTokens ? `${t.minTokens} $ENTRAIN` : "free"}
                   </span>
+                  {t.lineage?.accuracy ? (
+                    <span className="pill">{t.lineage.accuracy}</span>
+                  ) : null}
                 </div>
                 <h3>{t.title}</h3>
                 <p className="muted">{t.summary}</p>

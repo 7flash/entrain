@@ -5,6 +5,10 @@ import {
   type ProtocolAnalysis,
 } from "@/format/protocol-analyzer";
 import {
+  compareToReference,
+  type ReferenceMatch,
+} from "@/format/protocol-reference";
+import {
   allTemplates,
   findTemplate,
   templatesByCategory,
@@ -15,6 +19,7 @@ import {
 export type SoundtrackRow = EntrainTemplateV1 & {
   summaryStats: SessionSummary;
   analysis: ProtocolAnalysis;
+  referenceMatch: ReferenceMatch | null;
 };
 
 export function toSoundtrack(template: EntrainTemplateV1): SoundtrackRow {
@@ -22,6 +27,10 @@ export function toSoundtrack(template: EntrainTemplateV1): SoundtrackRow {
     ...template,
     summaryStats: summarizeSession(template.session),
     analysis: analyzeSession(template.session),
+    referenceMatch: compareToReference(
+      template.session,
+      template.lineage?.referenceId,
+    ),
   };
 }
 

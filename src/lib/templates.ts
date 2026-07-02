@@ -5,6 +5,10 @@ import type {
 } from "@/format/entrain-format";
 import { sanitizeSession, summarizeSession } from "@/format/entrain-format";
 import { analyzeSession } from "@/format/protocol-analyzer";
+import {
+  compareToReference,
+  type ProtocolLineageV1,
+} from "@/format/protocol-reference";
 import { db } from "./db";
 import { dbMeasure } from "./measure";
 
@@ -35,6 +39,23 @@ function t(input: Omit<EntrainTemplateV1, "format">): EntrainTemplateV1 {
     session: sanitizeSession(input.session),
   };
 }
+
+function lineage(
+  referenceId: string,
+  accuracy: ProtocolLineageV1["accuracy"],
+  disclosure: string,
+  intentionalDifferences: string[] = [],
+): ProtocolLineageV1 {
+  return {
+    referenceId,
+    accuracy,
+    sourceLabel: "Report-derived comparison table / synthesis notes",
+    disclosure,
+    intentionalDifferences,
+  };
+}
+
+export const BUILTIN_SOUNDTRACK_REVISION = "builtin-v8-reference-lineage";
 
 export const seedTemplates: EntrainTemplateV1[] = [
   t({
@@ -169,10 +190,19 @@ export const seedTemplates: EntrainTemplateV1[] = [
     minTokens: 1,
     unlockNote: "Holder tier: basic multiplexed binaural stack.",
     summary:
-      "Multiplexed low-frequency binaural stack plus continuous pink noise bed.",
+      "Core two-layer Focus-10-style stack plus continuous pink noise bed.",
     description:
-      "A report-aligned, plain-language multiplexed stack: a slow delta anchor, theta support, and a continuous procedural pink-noise mask. The two binaural layers use matched gains and sit below the mask to reduce fatigue. Descriptive and experimental; not a medical or consciousness claim.",
+      "Core report-aligned reconstruction: 100 Hz / 1.5 Hz plus 200 Hz / 4.0 Hz, both continuous for 35 minutes over a procedural pink-noise mask. Disclosure: this is the simplified two-layer reconstruction, not an exact official tape clone; the report notes SBaGen-style measurements that include extra 250[4.0] and 300[4.0] carriers for a denser historical variant. Descriptive and experimental; not a medical or consciousness claim.",
     tags: ["binaural", "delta", "theta", "holder"],
+    lineage: lineage(
+      "core-focus-10",
+      "curated-reconstruction",
+      "Simplified/core Focus-10-style pattern: two static binaural layers over pink noise. Not an exact official tape clone.",
+      [
+        "Does not include denser 250[4.0] and 300[4.0] carriers noted elsewhere.",
+        "Does not include voice guidance, exact original amplitude balance, or analog tape drift.",
+      ],
+    ),
     session: s("Mind Awake Body Rest", 35, [
       {
         id: "delta-anchor",
@@ -206,6 +236,79 @@ export const seedTemplates: EntrainTemplateV1[] = [
     ]),
   }),
   t({
+    slug: "dense-mind-awake-body-rest",
+    title: "Dense Mind Awake Body Rest",
+    category: "gateway",
+    tier: "holder",
+    minTokens: 1,
+    unlockNote: "Holder tier: denser Focus-10-style carrier variant.",
+    summary:
+      "Four-layer Focus-10-style stack: 100[1.5], 200[4.0], 250[4.0], 300[4.0] over pink noise.",
+    description:
+      "Historical-carrier disclosure variant for the Focus-10-style pattern. It keeps the 100 Hz / 1.5 Hz delta anchor and adds 200 Hz, 250 Hz, and 300 Hz theta-rate carriers at 4.0 Hz over continuous pink noise. This is closer to the denser SBaGen-style carrier note than the simplified two-layer row, but still not an exact official tape clone because original amplitude balance, voice guidance, analog oscillator drift, and supporting material are not captured.",
+    tags: ["binaural", "delta", "theta", "historical-carriers", "holder"],
+    lineage: lineage(
+      "dense-focus-10",
+      "historical-variant",
+      "Dense carrier variant representing the 100[1.5], 200[4.0], 250[4.0], 300[4.0] map.",
+      [
+        "Amplitude balance is normalized for safe browser rendering.",
+        "No original voice guidance, tape drift, or supporting material.",
+      ],
+    ),
+    session: s("Dense Mind Awake Body Rest", 35, [
+      {
+        id: "delta-anchor",
+        type: "binaural",
+        carrierHz: 100,
+        wave: "sine",
+        keyframes: [
+          { tMin: 0, beatHz: 1.5, gainPct: 14 },
+          { tMin: 35, beatHz: 1.5, gainPct: 14 },
+        ],
+      },
+      {
+        id: "theta-200",
+        type: "binaural",
+        carrierHz: 200,
+        wave: "sine",
+        keyframes: [
+          { tMin: 0, beatHz: 4, gainPct: 14 },
+          { tMin: 35, beatHz: 4, gainPct: 14 },
+        ],
+      },
+      {
+        id: "theta-250",
+        type: "binaural",
+        carrierHz: 250,
+        wave: "sine",
+        keyframes: [
+          { tMin: 0, beatHz: 4, gainPct: 14 },
+          { tMin: 35, beatHz: 4, gainPct: 14 },
+        ],
+      },
+      {
+        id: "theta-300",
+        type: "binaural",
+        carrierHz: 300,
+        wave: "sine",
+        keyframes: [
+          { tMin: 0, beatHz: 4, gainPct: 14 },
+          { tMin: 35, beatHz: 4, gainPct: 14 },
+        ],
+      },
+      {
+        id: "pink-mask",
+        type: "noise",
+        noiseColor: "pink",
+        keyframes: [
+          { tMin: 0, gainPct: 50 },
+          { tMin: 35, gainPct: 50 },
+        ],
+      },
+    ]),
+  }),
+  t({
     slug: "expanded-awareness-stack",
     title: "Expanded Awareness Stack",
     category: "gateway",
@@ -213,10 +316,19 @@ export const seedTemplates: EntrainTemplateV1[] = [
     minTokens: 10,
     unlockNote: "Pro tier: larger stack with staged fade-ins.",
     summary:
-      "F10 base plus alpha and high-theta layers fading into a wider pink-masked stack.",
+      "Curated lower-carrier Focus-12-style stack: F10 base plus alpha/high-theta bridges.",
     description:
-      "A report-aligned staged multiplexed stack: base delta/theta remains stable while alpha and high-theta layers fade in over the first minute. Useful for multi-layer playback, timeline ramps, and token-tier gating.",
+      "Curated report-aligned reconstruction: base 100 Hz / 1.5 Hz and 200 Hz / 4.0 Hz layers remain stable, while 250 Hz / 10.0→10.1 Hz and 300 Hz / 4.8 Hz layers fade in over the first minute. Disclosure: this is the report's modern lower-carrier aggregation, not a strict historical tape/SBaGen carrier map; the report notes higher historical carriers such as 400[10.0], 500[10.1], and 600[4.8], represented separately in the Dense Expanded Awareness Stack.",
     tags: ["binaural", "multi-layer", "pro"],
+    lineage: lineage(
+      "curated-focus-12",
+      "curated-reconstruction",
+      "Curated/lower-carrier Focus-12-style pattern: F10 base plus 250 Hz alpha and 300 Hz high-theta bridges.",
+      [
+        "Uses lower bridge carriers than the higher-carrier historical note.",
+        "Does not include voice guidance, exact original amplitude balance, or analog tape drift.",
+      ],
+    ),
     session: s("Expanded Awareness Stack", 35, [
       {
         id: "delta-anchor",
@@ -272,6 +384,92 @@ export const seedTemplates: EntrainTemplateV1[] = [
     ]),
   }),
   t({
+    slug: "dense-expanded-awareness-stack",
+    title: "Dense Expanded Awareness Stack",
+    category: "gateway",
+    tier: "pro",
+    minTokens: 10,
+    unlockNote: "Pro tier: SBaGen-noted higher-carrier Focus-12-style variant.",
+    summary:
+      "Higher-carrier Focus-12-style variant using the 400/500/600 Hz bridge carriers noted in the report.",
+    description:
+      "Historical-carrier disclosure variant: keeps the 100 Hz / 1.5 Hz and 200 Hz / 4.0 Hz base, then adds the higher bridge carriers noted in the report comparison: 400[10.0], 500[10.1], and 600[4.8]. These bridge layers fade in over the first minute over a continuous pink-noise mask. This is closer to the report's SBaGen/tape-carrier note than the curated lower-carrier stack, but still not a guaranteed exact official tape clone because original amplitude balance, voice guidance, analog oscillator drift, and supporting material are not captured.",
+    tags: ["binaural", "multi-layer", "historical-carriers", "pro"],
+    lineage: lineage(
+      "dense-focus-12",
+      "historical-variant",
+      "Higher-carrier Focus-12-style variant using the report-noted 400/500/600 Hz bridge carriers.",
+      [
+        "Amplitude balance is normalized for headroom.",
+        "No original voice guidance, exact tape drift, or supporting material.",
+      ],
+    ),
+    session: s("Dense Expanded Awareness Stack", 35, [
+      {
+        id: "delta-anchor",
+        type: "binaural",
+        carrierHz: 100,
+        wave: "sine",
+        keyframes: [
+          { tMin: 0, beatHz: 1.5, gainPct: 12 },
+          { tMin: 35, beatHz: 1.5, gainPct: 12 },
+        ],
+      },
+      {
+        id: "theta-base",
+        type: "binaural",
+        carrierHz: 200,
+        wave: "sine",
+        keyframes: [
+          { tMin: 0, beatHz: 4, gainPct: 12 },
+          { tMin: 35, beatHz: 4, gainPct: 12 },
+        ],
+      },
+      {
+        id: "alpha-400",
+        type: "binaural",
+        carrierHz: 400,
+        wave: "sine",
+        keyframes: [
+          { tMin: 0, beatHz: 10, gainPct: 0 },
+          { tMin: 1, beatHz: 10, gainPct: 12 },
+          { tMin: 35, beatHz: 10, gainPct: 12 },
+        ],
+      },
+      {
+        id: "alpha-500",
+        type: "binaural",
+        carrierHz: 500,
+        wave: "sine",
+        keyframes: [
+          { tMin: 0, beatHz: 10.1, gainPct: 0 },
+          { tMin: 1, beatHz: 10.1, gainPct: 12 },
+          { tMin: 35, beatHz: 10.1, gainPct: 12 },
+        ],
+      },
+      {
+        id: "theta-600",
+        type: "binaural",
+        carrierHz: 600,
+        wave: "sine",
+        keyframes: [
+          { tMin: 0, beatHz: 4.8, gainPct: 0 },
+          { tMin: 1, beatHz: 4.8, gainPct: 12 },
+          { tMin: 35, beatHz: 4.8, gainPct: 12 },
+        ],
+      },
+      {
+        id: "pink-mask",
+        type: "noise",
+        noiseColor: "pink",
+        keyframes: [
+          { tMin: 0, gainPct: 50 },
+          { tMin: 35, gainPct: 50 },
+        ],
+      },
+    ]),
+  }),
+  t({
     slug: "deep-descent-60",
     title: "Deep Descent 60",
     category: "premium",
@@ -283,6 +481,14 @@ export const seedTemplates: EntrainTemplateV1[] = [
     description:
       "A report-aligned long-form descent: one 140 Hz binaural carrier gliding 10 → 2.5 Hz during the first 30 minutes, then 2.5 → 1.5 Hz during the second 30 minutes, with procedural rain/bowl masking and safe fade envelopes.",
     tags: ["binaural", "longform", "delta", "premium"],
+    lineage: lineage(
+      "deep-descent-60",
+      "curated-reconstruction",
+      "Report-aligned long-form descent with portable procedural ambience instead of bundled rain/bowl recordings.",
+      [
+        "Uses procedural rain and bowl-drone recipes rather than local/copyrighted ambience recordings.",
+      ],
+    ),
     session: s(
       "Deep Descent 60",
       60,
@@ -382,14 +588,47 @@ export const seedTemplates: EntrainTemplateV1[] = [
 export function seedIfNeeded() {
   return dbMeasure.measure("Seed templates", () => {
     if (db.templates.count() > 0) return false;
-    db.templates.insertMany(
-      seedTemplates.map((template, i) => rowFromTemplate(template, i)),
-    );
+    syncBuiltInTemplates("missing");
     return true;
   });
 }
 
-function rowFromTemplate(template: EntrainTemplateV1, sortOrder: number) {
+export function syncBuiltInTemplates(mode: "missing" | "upsert" = "missing") {
+  return dbMeasure.measure("Sync built-in soundtracks", () => {
+    let inserted = 0;
+    let updated = 0;
+    seedTemplates.forEach((template, i) => {
+      const row = rowFromTemplate(template, i);
+      const existing = db.templates
+        .select()
+        .where({ slug: row.slug })
+        .first() as any;
+      if (!existing) {
+        db.templates.insert(row);
+        inserted++;
+      } else if (mode === "upsert") {
+        db.templates.update(row).where({ slug: row.slug }).run();
+        updated++;
+      }
+    });
+    return {
+      inserted,
+      updated,
+      total: seedTemplates.length,
+      revision: BUILTIN_SOUNDTRACK_REVISION,
+    };
+  });
+}
+
+export function rowFromTemplate(
+  template: EntrainTemplateV1,
+  sortOrder: number,
+) {
+  const analysis = analyzeSession(template.session);
+  const referenceMatch = compareToReference(
+    template.session,
+    template.lineage?.referenceId,
+  );
   return {
     slug: template.slug,
     title: template.title,
@@ -406,12 +645,15 @@ function rowFromTemplate(template: EntrainTemplateV1, sortOrder: number) {
     status: "published",
     formatVersion: "entrain.session.v1",
     patternHash: patternHash(template.session),
-    analysisJson: analyzeSession(template.session),
-    safetyJson: {},
+    analysisJson: analysis,
+    safetyJson: { referenceMatch },
     evidenceLevel: template.evidenceLevel || "experimental",
-    headphonesRequired: analyzeSession(template.session).headphonesRequired,
+    headphonesRequired: analysis.headphonesRequired,
     defaultLoopMode: template.session.loop?.mode || "hold-last",
     defaultExportSec: template.session.durationMin * 60,
+    lineageJson: template.lineage || null,
+    referenceMatchJson: referenceMatch,
+    seedRevision: BUILTIN_SOUNDTRACK_REVISION,
   };
 }
 
@@ -485,6 +727,7 @@ function normalizeTemplate(row: any): EntrainTemplateV1 {
     minTokens,
     unlockNote: row.unlockNote || undefined,
     session: sanitizeSession(row.session),
+    lineage: row.lineageJson || row.lineage || undefined,
   };
 }
 

@@ -5,6 +5,10 @@ import {
   analysisBadge,
   claimRisk,
 } from "@/format/protocol-analyzer";
+import {
+  compareToReference,
+  protocolReferences,
+} from "@/format/protocol-reference";
 
 let adminToken = localStorage.getItem("entrain:admin-token") || "";
 let rows: any[] = [];
@@ -27,6 +31,17 @@ function freshRow() {
     isPublished: true,
     status: "published",
     sessionText: JSON.stringify(session, null, 2),
+    lineageText: JSON.stringify(
+      {
+        referenceId: "",
+        accuracy: "inspired",
+        sourceLabel: "",
+        disclosure: "",
+        intentionalDifferences: [],
+      },
+      null,
+      2,
+    ),
   };
 }
 
@@ -36,6 +51,11 @@ function App() {
   const claim = claimRisk(
     `${selected.title} ${selected.summary} ${selected.description} ${selected.unlockNote}`,
   );
+  const lineage = parseLineage();
+  const refMatch =
+    parsed && lineage?.referenceId
+      ? compareToReference(parsed, lineage.referenceId)
+      : null;
   return (
     <div className="panel">
       <div className="toolbar">
@@ -165,6 +185,19 @@ function App() {
                 <option value="archived">archived</option>
               </select>
             </Field>
+            <Field label="Reference spec">
+              <select
+                value={lineage?.referenceId || ""}
+                onChange={(e: any) => setReferenceId(e.currentTarget.value)}
+              >
+                <option value="">none / inspired</option>
+                {Object.values(protocolReferences).map((r) => (
+                  <option value={r.id} key={r.id}>
+                    {r.title}
+                  </option>
+                ))}
+              </select>
+            </Field>
           </div>
           <Field label="Summary">
             <textarea
@@ -234,6 +267,39 @@ function App() {
               </p>
             ) : null}
           </div>
+          <div className="notice">
+            <strong>
+              Reference match:{" "}
+              {refMatch
+                ? `${refMatch.matches ? "matches" : "differs"} · ${refMatch.score}/100`
+                : "none declared"}
+            </strong>
+            {refMatch?.deviations.length ? (
+              <ul className="small">
+                {refMatch.deviations.slice(0, 8).map((d) => (
+                  <li key={d.code + d.message}>
+                    {d.level}: {d.message}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="small">
+                Use lineage metadata to make intentional differences explicit on
+                the public soundtrack page.
+              </p>
+            )}
+          </div>
+          <Field label="Lineage / accuracy JSON">
+            <textarea
+              className="mono"
+              rows={8}
+              value={selected.lineageText || ""}
+              onInput={(e: any) => {
+                selected.lineageText = e.currentTarget.value;
+                paint();
+              }}
+            />
+          </Field>
           <Field label="ENTRAIN session JSON">
             <textarea
               className="mono"
@@ -270,6 +336,21 @@ function Field({ label, children }: { label: string; children: any }) {
     </div>
   );
 }
+function parseLineage() {
+  try {
+    const x = JSON.parse(selected.lineageText || "{}");
+    return x && typeof x === "object" ? x : null;
+  } catch {
+    return null;
+  }
+}
+function setReferenceId(referenceId: string) {
+  const x = parseLineage() || {};
+  x.referenceId = referenceId || "";
+  if (referenceId && !x.accuracy) x.accuracy = "curated-reconstruction";
+  selected.lineageText = JSON.stringify(x, null, 2);
+  paint();
+}
 function parseSelectedSession() {
   try {
     return sanitizeSession(JSON.parse(selected.sessionText));
@@ -282,6 +363,18 @@ function editRow(r: any) {
     ...r,
     tags: Array.isArray(r.tags) ? r.tags.join(", ") : r.tags,
     sessionText: JSON.stringify(r.session, null, 2),
+    lineageText: JSON.stringify(
+      r.lineageJson ||
+        r.lineage || {
+          referenceId: "",
+          accuracy: "inspired",
+          sourceLabel: "",
+          disclosure: "",
+          intentionalDifferences: [],
+        },
+      null,
+      2,
+    ),
   };
   paint();
 }
@@ -327,6 +420,7 @@ async function saveRow() {
   try {
     const session = sanitizeSession(JSON.parse(selected.sessionText));
     const a = analyzeSession(session);
+    const lineageJson = parseLineage();
     const c = claimRisk(
       `${selected.title} ${selected.summary} ${selected.description} ${selected.unlockNote}`,
     );
@@ -347,10 +441,12 @@ async function saveRow() {
         .map((x) => x.trim())
         .filter(Boolean),
       session,
+      lineageJson,
       analysisJson: a,
       safetyJson: { claimRisk: c },
     };
     delete (body as any).sessionText;
+    delete (body as any).lineageText;
     const res = await fetch("/api/admin/soundtracks", {
       method: "POST",
       headers: { "content-type": "application/json" },

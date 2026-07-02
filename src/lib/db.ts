@@ -28,6 +28,9 @@ export const db = new Database(
       headphonesRequired: z.boolean().default(false),
       defaultLoopMode: z.string().default("hold-last"),
       defaultExportSec: z.number().optional(),
+      lineageJson: z.any().optional(),
+      referenceMatchJson: z.any().optional(),
+      seedRevision: z.string().default("builtin-v8"),
     }),
     walletChallenges: z.object({
       publicKey: z.string(),
@@ -93,4 +96,7 @@ export type TemplateRow = {
   headphonesRequired?: boolean;
   defaultLoopMode?: string;
   defaultExportSec?: number;
+  lineageJson?: any;
+  referenceMatchJson?: any;
+  seedRevision?: string;
 };

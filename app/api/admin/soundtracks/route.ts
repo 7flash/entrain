@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { ADMIN_TOKEN } from "@/lib/config";
 import { sanitizeSession } from "@/format/entrain-format";
 import { analyzeSession, claimRisk } from "@/format/protocol-analyzer";
+import { compareToReference } from "@/format/protocol-reference";
 import { json, readJson } from "@/lib/http";
 import { tierForMinTokens, patternHash } from "@/lib/templates";
 
@@ -25,6 +26,8 @@ type Body = {
   evidenceLevel?: string;
   defaultLoopMode?: string;
   defaultExportSec?: number;
+  lineageJson?: any;
+  seedRevision?: string;
 };
 
 function isAdmin(req: Request, body?: Body | null) {
@@ -78,6 +81,11 @@ export async function POST(req: Request) {
     body?.session || { name: body?.title || slug, durationMin: 20, layers: [] },
   );
   const analysis = analyzeSession(session);
+  const lineageJson =
+    body?.lineageJson && typeof body.lineageJson === "object"
+      ? body.lineageJson
+      : null;
+  const referenceMatch = compareToReference(session, lineageJson?.referenceId);
   const claims = claimRisk(
     `${body?.title || ""} ${body?.summary || ""} ${body?.description || ""} ${body?.unlockNote || ""}`,
   );
@@ -108,13 +116,16 @@ export async function POST(req: Request) {
     formatVersion: "entrain.session.v1",
     patternHash: patternHash(session),
     analysisJson: analysis,
-    safetyJson: { claims },
+    safetyJson: { claims, referenceMatch },
     evidenceLevel: String(body?.evidenceLevel || "experimental"),
     headphonesRequired: analysis.headphonesRequired,
     defaultLoopMode: session.loop?.mode || "hold-last",
     defaultExportSec: Number(
       body?.defaultExportSec || session.durationMin * 60,
     ),
+    lineageJson,
+    referenceMatchJson: referenceMatch,
+    seedRevision: String(body?.seedRevision || "admin"),
   };
   const existing = db.templates.select().where({ slug }).first() as any;
   if (existing) db.templates.update(row).where({ slug }).run();
