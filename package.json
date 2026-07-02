@@ -1,0 +1,24 @@
+{
+  "name": "entrain-tradjs-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tradjs serve 3000",
+    "build": "tradjs build",
+    "start": "tradjs serve 3000",
+    "seed": "bun run src/lib/seed.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@noble/ed25519": "^2.3.0",
+    "bs58": "^6.0.0",
+    "measure-fn": "^3.8.1",
+    "sqlite-zod-orm": "^3.26.1",
+    "tradjs": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.19",
+    "typescript": "^5.9.2"
+  }
+}
