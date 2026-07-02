@@ -3,6 +3,7 @@ import {
   sanitizeSession,
   type EntrainSessionV1,
 } from "@/format/entrain-format";
+import { signalMapForSession, formatSignalPoint } from "@/format/channel-map";
 import { createAudioEngine } from "@/client/audio-engine";
 import {
   connectAndVerify,
@@ -113,6 +114,8 @@ function App() {
         </div>
       </div>
 
+      {session ? <UnlockedSignalMap session={session} /> : null}
+
       <p className="small">
         Exact-length export follows the soundtrack loop rule: hold-last for
         descents, repeat/crossfade-repeat for loops. Repetition export renders
@@ -120,6 +123,50 @@ function App() {
         loop metadata, but the local audio file must be loaded in the editor
         before it can appear in exports.
       </p>
+    </div>
+  );
+}
+
+function UnlockedSignalMap({ session }: { session: EntrainSessionV1 }) {
+  const map = signalMapForSession(session);
+  return (
+    <div className="notice" style={{ marginTop: "12px" }}>
+      <strong>Unlocked signal map</strong>
+      <p className="small">
+        {map.headphonesRequired
+          ? "Stereo headphones required."
+          : "No binaural headphone requirement."}{" "}
+        {map.portable
+          ? "Portable JSON pattern."
+          : "Contains runtime local audio files."}
+      </p>
+      <table className="matrix">
+        <thead>
+          <tr>
+            <th>Layer</th>
+            <th>Formula</th>
+            <th>Keyframes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {map.layers.map((layer) => (
+            <tr key={layer.id}>
+              <td>
+                {layer.label}
+                <br />
+                <span className="small">
+                  {layer.panNote ||
+                    (layer.requiresHeadphones ? "headphones required" : "")}
+                </span>
+              </td>
+              <td>{layer.formula}</td>
+              <td>
+                {layer.points.map((p) => formatSignalPoint(p)).join(" → ")}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

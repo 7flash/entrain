@@ -9,6 +9,7 @@ import {
   compareToReference,
   protocolReferences,
 } from "@/format/protocol-reference";
+import { signalMapForSession, formatSignalPoint } from "@/format/channel-map";
 
 let adminToken = localStorage.getItem("entrain:admin-token") || "";
 let rows: any[] = [];
@@ -56,6 +57,7 @@ function App() {
     parsed && lineage?.referenceId
       ? compareToReference(parsed, lineage.referenceId)
       : null;
+  const signalMap = parsed ? signalMapForSession(parsed) : null;
   return (
     <div className="panel">
       <div className="toolbar">
@@ -289,6 +291,38 @@ function App() {
               </p>
             )}
           </div>
+          {signalMap ? (
+            <div className="notice">
+              <strong>Computed signal map</strong>
+              <table className="matrix">
+                <thead>
+                  <tr>
+                    <th>Layer</th>
+                    <th>Formula</th>
+                    <th>Keyframes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {signalMap.layers.map((l) => (
+                    <tr key={l.id}>
+                      <td>
+                        {l.label}
+                        <br />
+                        <span className="small">
+                          {l.panNote ||
+                            (l.requiresHeadphones ? "headphones required" : "")}
+                        </span>
+                      </td>
+                      <td>{l.formula}</td>
+                      <td>
+                        {l.points.map((p) => formatSignalPoint(p)).join(" → ")}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
           <Field label="Lineage / accuracy JSON">
             <textarea
               className="mono"
@@ -421,15 +455,21 @@ async function saveRow() {
     const session = sanitizeSession(JSON.parse(selected.sessionText));
     const a = analyzeSession(session);
     const lineageJson = parseLineage();
+    const refMatch = lineageJson?.referenceId
+      ? compareToReference(session, lineageJson.referenceId)
+      : null;
     const c = claimRisk(
       `${selected.title} ${selected.summary} ${selected.description} ${selected.unlockNote}`,
     );
-    if (
-      (selected.status === "published" || selected.isPublished) &&
-      (!a.publishable || c.risky)
-    ) {
+    const publishing = selected.status === "published" || selected.isPublished;
+    if (publishing && (!a.publishable || c.risky)) {
       throw new Error(
         "publish blocked by analyzer; save as draft or fix issues/claims",
+      );
+    }
+    if (publishing && refMatch && !refMatch.matches) {
+      throw new Error(
+        "publish blocked by declared reference mismatch; fix pattern, choose a different reference, or save as draft",
       );
     }
     const body = {
@@ -443,7 +483,7 @@ async function saveRow() {
       session,
       lineageJson,
       analysisJson: a,
-      safetyJson: { claimRisk: c },
+      safetyJson: { claimRisk: c, referenceMatch: refMatch },
     };
     delete (body as any).sessionText;
     delete (body as any).lineageText;

@@ -55,7 +55,7 @@ function lineage(
   };
 }
 
-export const BUILTIN_SOUNDTRACK_REVISION = "builtin-v8-reference-lineage";
+export const BUILTIN_SOUNDTRACK_REVISION = "builtin-v9-signal-map-gates";
 
 export const seedTemplates: EntrainTemplateV1[] = [
   t({

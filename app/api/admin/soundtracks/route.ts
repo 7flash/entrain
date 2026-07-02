@@ -98,6 +98,15 @@ export async function POST(req: Request) {
       { ok: false, error: "publish blocked by analyzer", analysis, claims },
       { status: 422 },
     );
+  if (wantsPublished && referenceMatch && !referenceMatch.matches)
+    return json(
+      {
+        ok: false,
+        error: "publish blocked by declared reference mismatch",
+        referenceMatch,
+      },
+      { status: 422 },
+    );
   const row = {
     slug,
     title: String(body?.title || session.name || slug).slice(0, 160),

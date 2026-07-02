@@ -1,5 +1,6 @@
 import { findSoundtrack } from "@/lib/soundtracks";
 import { analyzeSession, analysisBadge } from "@/format/protocol-analyzer";
+import { signalMapForSession, formatSignalPoint } from "@/format/channel-map";
 
 const layerName = (l: any) => {
   if (l.type === "sample")
@@ -33,6 +34,10 @@ export default function SoundtrackDetailPage({ params }: Props) {
   const analysis = analyzeSession(template.session);
   const lineage = template.lineage;
   const ref = template.referenceMatch;
+  const unlockedPublic = template.minTokens <= 0;
+  const signalMap = unlockedPublic
+    ? signalMapForSession(template.session)
+    : null;
   return (
     <main>
       <section className="hero">
@@ -116,7 +121,7 @@ export default function SoundtrackDetailPage({ params }: Props) {
                   · score {ref.score}/100
                 </p>
               ) : null}
-              {ref?.deviations.length ? (
+              {unlockedPublic && ref?.deviations.length ? (
                 <ul className="small">
                   {ref.deviations.slice(0, 6).map((d) => (
                     <li key={d.code + d.message}>
@@ -124,6 +129,11 @@ export default function SoundtrackDetailPage({ params }: Props) {
                     </li>
                   ))}
                 </ul>
+              ) : null}
+              {!unlockedPublic && ref?.deviations.length ? (
+                <p className="small">
+                  Detailed deviation list unlocks with the playable pattern.
+                </p>
               ) : null}
             </div>
           ) : null}
@@ -136,7 +146,7 @@ export default function SoundtrackDetailPage({ params }: Props) {
           </div>
         </article>
         <article className="card">
-          <h3>Soundtrack structure</h3>
+          <h3>{unlockedPublic ? "Signal map" : "Locked signal map"}</h3>
           <p className="small">
             Pattern length: {template.session.durationMin} minutes ·{" "}
             {template.session.layers.length} layers · fade{" "}
@@ -154,29 +164,44 @@ export default function SoundtrackDetailPage({ params }: Props) {
               ? " · crossfade loops"
               : ""}
           </p>
-          <table className="matrix">
-            <thead>
-              <tr>
-                <th>Layer</th>
-                <th>Timeline</th>
-              </tr>
-            </thead>
-            <tbody>
-              {template.session.layers.map((l) => (
-                <tr key={l.id}>
-                  <td>{layerName(l)}</td>
-                  <td>
-                    {l.keyframes
-                      .map(
-                        (k: any) =>
-                          `${k.tMin}m:${k.beatHz ? `${k.beatHz}Hz/` : ""}${k.gainPct}%`,
-                      )
-                      .join(" → ")}
-                  </td>
+          {!unlockedPublic ? (
+            <p className="notice">
+              Exact layer/keyframe data is part of the gated soundtrack pattern.
+              Unlock the player to view the full left/right frequency map and
+              render it locally.
+            </p>
+          ) : null}
+          {signalMap ? (
+            <table className="matrix">
+              <thead>
+                <tr>
+                  <th>Layer</th>
+                  <th>Formula</th>
+                  <th>Keyframes</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {signalMap.layers.map((l) => (
+                  <tr key={l.id}>
+                    <td>
+                      {l.label}
+                      <br />
+                      <span className="small">
+                        {l.panNote ||
+                          (l.requiresHeadphones ? "headphones required" : "")}
+                      </span>
+                    </td>
+                    <td>{l.formula}</td>
+                    <td>
+                      {l.points
+                        .map((p: any) => formatSignalPoint(p))
+                        .join(" → ")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
         </article>
       </section>
     </main>
