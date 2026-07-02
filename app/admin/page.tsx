@@ -16,6 +16,11 @@ export default function AdminPage() {
           header/token for admin writes. Keep it server-side and replace it with
           your preferred role system before production.
         </p>
+        <p>
+          <a className="btn" href="/admin/audit">
+            Open audit dashboard
+          </a>
+        </p>
       </section>
       <section className="console" id="admin-root">
         <div className="panel">

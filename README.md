@@ -1,4 +1,4 @@
-# ENTRAIN TradJS Server v0.5
+# ENTRAIN TradJS Server v0.10
 
 Server-backed ENTRAIN with a first-class **pattern format**, database-backed **ready brainwave soundtracks**, a free editor, wallet-saved private library, Phantom/SPL-token gates, and a publish-time protocol analyzer.
 
@@ -150,3 +150,133 @@ For production, replace the `ADMIN_TOKEN` scaffold with a wallet-role or server-
 Ambience files are decoded into runtime-only `AudioBuffer`s. JSON, saved sessions, and share URLs preserve filenames and loop settings only. After loading a shared/saved session, reload the local audio file before playback/export.
 
 Use procedural ambience layers for prepared soundtracks that must be fully portable without external audio assets.
+
+
+## v0.6 protocol-audit patch
+
+This build tightens the three report-inspired prepared soundtracks against the comparison table and synthesis specs:
+
+- `Deep Descent 60`: one 140 Hz binaural carrier, 10 → 2.5 Hz over minutes 0–30 and 2.5 → 1.5 Hz over minutes 30–60, with rain plus bowl-drone masking.
+- `Mind Awake Body Rest`: 35 minutes, two static binaural layers — 100 Hz / 1.5 Hz and 200 Hz / 4.0 Hz — plus continuous pink noise.
+- `Expanded Awareness Stack`: 35 minutes, 100 Hz / 1.5 Hz, 200 Hz / 4.0 Hz, 250 Hz / 10 → 10.1 Hz fade-in, and 300 Hz / 4.8 Hz fade-in, plus continuous pink noise. The fade-in layers now reach target gain at minute 1, matching the report’s 60-second synthesis model.
+
+The prepared rows are still described as report-aligned / inspired rather than exact commercial copies. The procedural ambience recipes are portable JSON substitutes for copyrighted or local recordings.
+
+
+## v0.7 accuracy pass
+
+- Added explicit disclosure text to the Focus-10-style and Focus-12-style seed descriptions when the stored pattern is a curated/simplified reconstruction rather than an exact historical tape clone.
+- Added `Dense Expanded Awareness Stack`, a separate Focus-12-style higher-carrier variant using the report-noted bridge carriers `400[10.0]`, `500[10.1]`, and `600[4.8]`.
+- Kept `Expanded Awareness Stack` as the more comfortable lower-carrier curated version using `250[10.0→10.1]` and `300[4.8]`.
+- Reminder: `seedIfNeeded()` does not overwrite an existing local database. Delete the local DB or update rows through `/admin` to see seed changes in an already-running install.
+
+## v0.8 reference-lineage pass
+
+This pass makes the “is this implemented correctly?” question first-class data instead of buried description text.
+
+- Added `src/format/protocol-reference.ts`:
+  - Named reference specs for `core-focus-10`, `dense-focus-10`, `curated-focus-12`, `dense-focus-12`, and `deep-descent-60`.
+  - `compareToReference(session, referenceId)` checks duration, carrier map, beat keyframes, masks/ambience, and intentional extra/missing layers.
+- Added per-row lineage metadata:
+  - `lineage.accuracy`: `exact-to-report`, `curated-reconstruction`, `historical-variant`, or `inspired`.
+  - `lineage.referenceId`: which reference spec the row claims to match.
+  - `lineage.disclosure` and `lineage.intentionalDifferences`: public description of known deviations.
+- Added database fields:
+  - `lineageJson`
+  - `referenceMatchJson`
+  - `seedRevision`
+- Soundtrack detail pages now show:
+  - lineage / accuracy label
+  - source disclosure
+  - intentional differences
+  - reference-match score and deviations
+- Admin now has a Reference Spec selector and lineage JSON editor. It previews the reference comparison before publishing.
+- Added `Dense Mind Awake Body Rest`, the Focus-10-style four-carrier variant: `100[1.5]`, `200[4.0]`, `250[4.0]`, `300[4.0]` over pink noise.
+- Added an idempotent built-in soundtrack sync command:
+
+```bash
+bun run sync:soundtracks
+```
+
+Use this after upgrading an existing local DB. Unlike `seed`, it upserts the built-in soundtrack rows and refreshes descriptions, lineage metadata, reference match data, and seed revisions without deleting user library rows.
+
+
+## v0.9 signal-map / entitlement-hardening pass
+
+This pass turns the “is this pattern mathematically correct?” check into a visible product feature and closes an access leak in the public soundtrack page.
+
+- Added `src/format/channel-map.ts`.
+  - Computes the exact signal map from any `entrain.session.v1` object.
+  - Shows `left = carrier - beat/2` and `right = carrier + beat/2` for binaural/monaural layers.
+  - Shows carrier/LFO points for isochronic layers and gain dB for every layer.
+- Soundtrack detail pages now avoid leaking exact locked patterns.
+  - Free rows show their full signal map publicly.
+  - Gated rows show metadata, lineage, and analyzer summary, but exact layer/keyframe maps appear only after the user unlocks the player through Phantom/token access.
+- The unlocked soundtrack player now displays the computed left/right frequency map after access is granted.
+- Admin now shows a computed signal map while editing a row, so the publisher can verify arithmetic before saving.
+- Publishing now blocks declared-reference mismatches. If a row claims a reference spec, the stored pattern must match that spec or stay in draft.
+- Added a built-in regression command:
+
+```bash
+bun run audit:soundtracks
+bun run audit:soundtracks -- --signals
+```
+
+The audit checks all built-in rows for analyzer hard errors and declared reference mismatches, and can print the computed signal maps for review.
+
+## v0.10 admin audit / publish-integrity pass
+
+This pass turns the correctness work into an operational dashboard for prepared soundtrack rows.
+
+- Added `src/lib/audit-report.ts` as the shared audit engine.
+  - Recomputes analyzer output from stored `entrain.session.v1` JSON.
+  - Recomputes declared reference-spec match.
+  - Recomputes pattern hash and detects stale stored hashes.
+  - Checks whether stored `analysisJson` / `referenceMatchJson` drifted from the current analyzer implementation.
+  - Re-runs the public-copy claim-risk scanner.
+  - Can include full computed signal maps for admin use.
+- Added admin API:
+
+```bash
+GET /api/admin/audit
+GET /api/admin/audit?signals=1
+```
+
+  Both require the same `ADMIN_TOKEN` scaffold as the soundtrack manager.
+
+- Added admin dashboard:
+
+```bash
+/admin/audit
+```
+
+  It summarizes row counts, OK/warn/fail status, gates, pattern hashes, declared reference status, analyzer issues, claim-risk hits, and optional signal maps.
+
+- Added database audit CLI:
+
+```bash
+bun run audit:db
+bun run audit:db -- --signals
+bun run audit:db -- --json
+```
+
+- Reworked the built-in audit CLI to use the same shared audit engine:
+
+```bash
+bun run audit:soundtracks
+bun run audit:soundtracks -- --signals
+bun run audit:soundtracks -- --json
+```
+
+- Updated built-in seed revision to `builtin-v10-admin-audit` so `bun run sync:soundtracks` can refresh row metadata cleanly on existing local databases.
+
+Recommended upgrade check:
+
+```bash
+bun install
+cp .env.example .env
+bun run sync:soundtracks
+bun run audit:soundtracks
+bun run audit:db
+bun run dev
+```

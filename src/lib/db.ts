@@ -30,7 +30,7 @@ export const db = new Database(
       defaultExportSec: z.number().optional(),
       lineageJson: z.any().optional(),
       referenceMatchJson: z.any().optional(),
-      seedRevision: z.string().default("builtin-v9"),
+      seedRevision: z.string().default("builtin-v10"),
     }),
     walletChallenges: z.object({
       publicKey: z.string(),

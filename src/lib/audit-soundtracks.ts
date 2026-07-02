@@ -1,54 +1,60 @@
-import { seedTemplates, BUILTIN_SOUNDTRACK_REVISION } from "./templates";
-import { analyzeSession } from "@/format/protocol-analyzer";
-import { compareToReference } from "@/format/protocol-reference";
-import { signalMapText } from "@/format/channel-map";
+import {
+  seedTemplates,
+  BUILTIN_SOUNDTRACK_REVISION,
+  rowFromTemplate,
+} from "./templates";
+import { buildAuditReport } from "./audit-report";
 
-let failures = 0;
-console.log(
-  `ENTRAIN built-in soundtrack audit · ${BUILTIN_SOUNDTRACK_REVISION}`,
-);
+const includeSignals = process.argv.includes("--signals");
+const jsonOut = process.argv.includes("--json");
+const rows = seedTemplates.map((template, i) => rowFromTemplate(template, i));
+const report = buildAuditReport(rows, { includeSignals });
 
-for (const template of seedTemplates) {
-  const analysis = analyzeSession(template.session);
-  const ref = compareToReference(
-    template.session,
-    template.lineage?.referenceId,
-  );
-  const hardIssues = analysis.issues.filter((issue) => issue.level === "error");
-  const refErrors = ref?.deviations.filter((d) => d.level === "error") || [];
-  const status = hardIssues.length || refErrors.length ? "FAIL" : "OK";
-  if (status === "FAIL") failures++;
-  console.log(`\n${status} /${template.slug} · ${template.title}`);
+if (jsonOut) {
   console.log(
-    `  pattern: ${template.session.durationMin}m · ${template.session.layers.length} layers · loop ${template.session.loop?.mode || "hold-last"}`,
+    JSON.stringify(
+      { revision: BUILTIN_SOUNDTRACK_REVISION, ...report },
+      null,
+      2,
+    ),
+  );
+} else {
+  console.log(
+    `ENTRAIN built-in soundtrack audit · ${BUILTIN_SOUNDTRACK_REVISION}`,
   );
   console.log(
-    `  analyzer: ${analysis.mixStatus} · peak ${analysis.estimatedPeakDb.toFixed(1)} dBFS · issues ${analysis.issues.length}`,
+    `Built-ins ${report.totals.rows} · OK ${report.totals.ok} · WARN ${report.totals.warn} · FAIL ${report.totals.fail}`,
   );
-  if (ref)
+  for (const row of report.rows) {
+    console.log(`\n${row.verdict.toUpperCase()} /${row.slug} · ${row.title}`);
     console.log(
-      `  reference: ${ref.referenceId} · ${ref.matches ? "matches" : "differs"} · score ${ref.score}/100 · deviations ${ref.deviations.length}`,
+      `  pattern: ${row.signalMapSummary.durationMin}m · ${row.signalMapSummary.layerCount} layers · hash ${row.patternHash}`,
     );
-  for (const issue of hardIssues)
-    console.log(`  ERROR analyzer/${issue.code}: ${issue.message}`);
-  for (const dev of refErrors)
-    console.log(`  ERROR reference/${dev.code}: ${dev.message}`);
-  if (process.argv.includes("--signals")) {
     console.log(
-      signalMapText(template.session)
-        .split("\n")
-        .map((line) => `  ${line}`)
-        .join("\n"),
+      `  analyzer: ${row.analysis.mixStatus} · peak ${row.analysis.estimatedPeakDb.toFixed(1)} dBFS · issues ${row.analysis.issues.length}`,
     );
+    if (row.referenceMatch)
+      console.log(
+        `  reference: ${row.referenceMatch.referenceId} · ${row.referenceMatch.matches ? "matches" : "differs"} · score ${row.referenceMatch.score}/100 · deviations ${row.referenceMatch.deviations.length}`,
+      );
+    for (const blocker of row.blockers) console.log(`  BLOCK ${blocker}`);
+    for (const warning of row.warnings) console.log(`  WARN  ${warning}`);
+    if (includeSignals && row.signalMapText)
+      console.log(
+        row.signalMapText
+          .split("\n")
+          .map((line) => `  ${line}`)
+          .join("\n"),
+      );
   }
 }
 
-if (failures) {
+if (report.totals.fail) {
   console.error(
-    `\nAudit failed: ${failures} built-in soundtrack(s) have hard analyzer/reference errors.`,
+    `\nAudit failed: ${report.totals.fail} built-in soundtrack(s) have hard publish blockers.`,
   );
   process.exit(1);
 }
 console.log(
-  "\nAudit passed: all built-in soundtracks are analyzer-clean and match declared references.",
+  "\nAudit passed: all built-in soundtracks are publishable under current analyzer/reference rules.",
 );

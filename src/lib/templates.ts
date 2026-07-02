@@ -55,7 +55,7 @@ function lineage(
   };
 }
 
-export const BUILTIN_SOUNDTRACK_REVISION = "builtin-v9-signal-map-gates";
+export const BUILTIN_SOUNDTRACK_REVISION = "builtin-v10-admin-audit";
 
 export const seedTemplates: EntrainTemplateV1[] = [
   t({
