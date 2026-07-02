@@ -1,6 +1,24 @@
-# ENTRAIN TradJS Server v0.10
+# ENTRAIN TradJS Server v0.11
 
 Server-backed ENTRAIN with a first-class **pattern format**, database-backed **ready brainwave soundtracks**, a free editor, wallet-saved private library, Phantom/SPL-token gates, and a publish-time protocol analyzer.
+
+
+
+## v0.11 token/market pass
+
+This build aligns the app with the token ticker now being **$WAVES** while keeping older `ENTRAIN_MINT` deployments compatible.
+
+- Added centralized token config:
+  - `TOKEN_TICKER` defaults to `WAVES`.
+  - `TOKEN_DISPLAY_NAME` defaults to `$WAVES`.
+  - `TOKEN_CHAIN` defaults to `solana`.
+  - `TOKEN_MINT` is the canonical mint env var; `ENTRAIN_MINT` remains a backward-compatible alias.
+- Added token APIs:
+  - `GET /api/token/config` returns ticker/chain/mint metadata for client UI.
+  - `GET /api/token/market` returns a cached DexScreener market snapshot with market cap, FDV, price, liquidity, 24h volume/change, and best pair URL.
+- Homepage now includes a live `$WAVES` market/gate card that refreshes every 5 seconds in the browser.
+- Wallet and gate labels now read from token config instead of hardcoding `$ENTRAIN`.
+- Phantom signed-message copy now says it checks the configured token balance rather than a fixed ticker.
 
 ## Stack
 

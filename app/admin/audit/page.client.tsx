@@ -84,7 +84,7 @@ function App() {
 function AuditRow({ row }: { row: any }) {
   const isOpen = !!expanded[row.slug];
   const ref = row.referenceMatch;
-  const gate = row.minTokens ? `${row.minTokens} $ENTRAIN` : "free";
+  const gate = row.minTokens ? `${row.minTokens} tokens` : "free";
   const issueText =
     [...(row.blockers || []), ...(row.warnings || [])].join(" · ") || "none";
   return (

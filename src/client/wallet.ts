@@ -21,8 +21,45 @@ export type WalletState = {
   balance: number;
   expiresAt?: number | null;
 };
+export type TokenMeta = {
+  ticker: string;
+  displayName: string;
+  chainId: string;
+  tokenAddress: string;
+};
+
+let tokenMetaPromise: Promise<TokenMeta> | null = null;
+let tokenMetaCache: TokenMeta = {
+  ticker: "WAVES",
+  displayName: "$WAVES",
+  chainId: "solana",
+  tokenAddress: "",
+};
+
+export async function getTokenMeta(): Promise<TokenMeta> {
+  if (!tokenMetaPromise) {
+    tokenMetaPromise = fetch("/api/token/config")
+      .then((x) => x.json())
+      .then((r) => {
+        tokenMetaCache = {
+          ticker: r.ticker || "WAVES",
+          displayName: r.displayName || "$WAVES",
+          chainId: r.chainId || "solana",
+          tokenAddress: r.tokenAddress || "",
+        };
+        return tokenMetaCache;
+      })
+      .catch(() => tokenMetaCache);
+  }
+  return tokenMetaPromise;
+}
+
+export function tokenLabel(amount: number | string) {
+  return `${amount} ${tokenMetaCache.displayName}`;
+}
 
 export async function getWalletState(): Promise<WalletState> {
+  await getTokenMeta();
   const r = await fetch("/api/auth/session")
     .then((x) => x.json())
     .catch(() => ({ authenticated: false }));
@@ -35,6 +72,7 @@ export async function getWalletState(): Promise<WalletState> {
 }
 
 export async function refreshWalletBalance() {
+  await getTokenMeta();
   const r = await fetch("/api/auth/refresh", { method: "POST" }).then((x) =>
     x.json(),
   );
@@ -48,6 +86,7 @@ export async function refreshWalletBalance() {
 }
 
 export async function connectAndVerify() {
+  await getTokenMeta();
   const provider = window.phantom?.solana || window.solana;
   if (!provider?.isPhantom) {
     window.open("https://phantom.app/", "_blank");

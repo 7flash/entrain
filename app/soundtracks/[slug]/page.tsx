@@ -1,3 +1,4 @@
+import { TOKEN_DISPLAY_NAME } from "@/lib/config";
 import { findSoundtrack } from "@/lib/soundtracks";
 import { analyzeSession, analysisBadge } from "@/format/protocol-analyzer";
 import { signalMapForSession, formatSignalPoint } from "@/format/channel-map";
@@ -29,7 +30,7 @@ export default function SoundtrackDetailPage({ params }: Props) {
     );
   }
   const req = template.minTokens
-    ? `${template.minTokens} $ENTRAIN required`
+    ? `${template.minTokens} ${TOKEN_DISPLAY_NAME} required`
     : "Free soundtrack";
   const analysis = analyzeSession(template.session);
   const lineage = template.lineage;

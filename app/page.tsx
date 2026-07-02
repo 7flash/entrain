@@ -1,4 +1,5 @@
 import { featuredSoundtracks } from "@/lib/soundtracks";
+import { TOKEN_DISPLAY_NAME } from "@/lib/config";
 
 export default function HomePage() {
   const featured = featuredSoundtracks(3);
@@ -26,6 +27,7 @@ export default function HomePage() {
             Private library
           </a>
         </p>
+        <div id="token-market-root" />
       </section>
 
       <section className="two">
@@ -47,7 +49,7 @@ export default function HomePage() {
           <p className="muted">
             Published rows in the database appear as ready soundtracks. Free
             rows open immediately; holder/pro/collector rows require the
-            configured $ENTRAIN balance in the connected wallet.
+            configured {TOKEN_DISPLAY_NAME} balance in the connected wallet.
           </p>
           <p>
             <a className="btn" href="/soundtracks">
@@ -73,7 +75,9 @@ export default function HomePage() {
                 <span className="pill">{t.category}</span>
                 <span className={`pill tier-${t.tier}`}>{t.tier}</span>
                 <span className="pill">
-                  {t.minTokens ? `${t.minTokens} $ENTRAIN` : "free"}
+                  {t.minTokens
+                    ? `${t.minTokens} ${TOKEN_DISPLAY_NAME}`
+                    : "free"}
                 </span>
               </div>
               <h3>{t.title}</h3>

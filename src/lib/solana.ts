@@ -1,4 +1,4 @@
-import { SOLANA_RPC, ENTRAIN_MINT } from "./config";
+import { SOLANA_RPC, TOKEN_MINT } from "./config";
 import { rpcMeasure } from "./measure";
 
 type RpcTokenAccount = {
@@ -13,7 +13,7 @@ type RpcTokenAccount = {
   };
 };
 
-export async function getTokenBalance(publicKey: string, mint = ENTRAIN_MINT) {
+export async function getTokenBalance(publicKey: string, mint = TOKEN_MINT) {
   return await rpcMeasure.measure.assert(
     {
       label: "Solana token balance",

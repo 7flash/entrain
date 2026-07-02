@@ -9,6 +9,7 @@ import {
   connectAndVerify,
   getWalletState,
   refreshWalletBalance,
+  tokenLabel,
   type WalletState,
 } from "@/client/wallet";
 
@@ -33,7 +34,7 @@ function App() {
           {wallet.authenticated ? (
             <div className="small">
               Wallet {wallet.publicKey?.slice(0, 4)}…
-              {wallet.publicKey?.slice(-4)} · {wallet.balance} $ENTRAIN
+              {wallet.publicKey?.slice(-4)} · {tokenLabel(wallet.balance)}
             </div>
           ) : null}
         </div>

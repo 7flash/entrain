@@ -1,5 +1,6 @@
 import { db } from "./db";
 import { buildAuditReport } from "./audit-report";
+import { TOKEN_DISPLAY_NAME } from "./config";
 
 const includeSignals = process.argv.includes("--signals");
 const jsonOut = process.argv.includes("--json");
@@ -18,7 +19,7 @@ if (jsonOut) {
   for (const row of report.rows) {
     console.log(`\n${row.verdict.toUpperCase()} /${row.slug} · ${row.title}`);
     console.log(
-      `  status: ${row.status} · gate: ${row.minTokens ? row.minTokens + " $ENTRAIN" : "free"} · hash ${row.patternHash}${row.hashDrift ? " (stored hash stale)" : ""}`,
+      `  status: ${row.status} · gate: ${row.minTokens ? row.minTokens + " " + TOKEN_DISPLAY_NAME : "free"} · hash ${row.patternHash}${row.hashDrift ? " (stored hash stale)" : ""}`,
     );
     console.log(
       `  analyzer: ${row.analysis.mixStatus} · peak ${row.analysis.estimatedPeakDb.toFixed(1)} dBFS · issues ${row.analysis.issues.length}`,

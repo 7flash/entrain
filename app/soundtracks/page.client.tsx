@@ -3,6 +3,7 @@ import {
   connectAndVerify,
   getWalletState,
   refreshWalletBalance,
+  tokenLabel,
   type WalletState,
 } from "@/client/wallet";
 
@@ -17,7 +18,7 @@ function AuthBox() {
           <strong>Wallet access</strong>
           <div className="small">
             {state.authenticated
-              ? `${state.publicKey?.slice(0, 4)}…${state.publicKey?.slice(-4)} · ${state.balance} $ENTRAIN`
+              ? `${state.publicKey?.slice(0, 4)}…${state.publicKey?.slice(-4)} · ${tokenLabel(state.balance)}`
               : "Connect Phantom to unlock gated soundtracks."}
           </div>
           {message ? <div className="small">{message}</div> : null}
@@ -66,8 +67,8 @@ function markCards() {
         label.classList.toggle("locked", !ok);
         label.classList.toggle("unlocked", ok);
         label.textContent = ok
-          ? `unlocked · ${need} $ENTRAIN`
-          : `locked · ${need} $ENTRAIN`;
+          ? `${"unlocked · "}${tokenLabel(need)}`
+          : `${"locked · "}${tokenLabel(need)}`;
       }
     });
 }

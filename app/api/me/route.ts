@@ -1,6 +1,7 @@
 import { authFromRequest } from "@/lib/access-policy";
 import { allSoundtracks } from "@/lib/soundtracks";
 import { json } from "@/lib/http";
+import { tokenConfig } from "@/lib/token-market";
 
 export function GET(req: Request) {
   const auth = authFromRequest(req);
@@ -13,6 +14,7 @@ export function GET(req: Request) {
   }));
   return json({
     ok: true,
+    token: tokenConfig(),
     wallet: auth
       ? { publicKey: auth.publicKey, balance, expiresAt: auth.expiresAt }
       : null,

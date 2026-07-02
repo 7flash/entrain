@@ -2,7 +2,7 @@ import bs58 from "bs58";
 import { verify } from "@noble/ed25519";
 import { db } from "./db";
 import { getTokenBalance } from "./solana";
-import { ALLOW_DEV_UNLOCK } from "./config";
+import { ALLOW_DEV_UNLOCK, TOKEN_DISPLAY_NAME } from "./config";
 import { authMeasure } from "./measure";
 
 const CHALLENGE_MS = 5 * 60_000;
@@ -13,14 +13,14 @@ export function createChallenge(publicKey: string) {
     const nonce = crypto.randomUUID();
     const issuedAt = new Date().toISOString();
     const message = [
-      "ENTRAIN wallet login",
+      "ENTRAIN Studio wallet login",
       "",
       `Wallet: ${publicKey}`,
       `Nonce: ${nonce}`,
       `Issued: ${issuedAt}`,
       `Origin: ${process.env.PUBLIC_ORIGIN || "local-dev"}`,
       "",
-      "Sign this message to verify wallet ownership. This does not authorize a transaction.",
+      `Sign this message to verify wallet ownership and check your ${TOKEN_DISPLAY_NAME} balance. This does not authorize a transaction.`,
     ].join("\n");
     db.walletChallenges.insert({
       publicKey,

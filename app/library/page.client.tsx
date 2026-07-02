@@ -2,6 +2,7 @@ import { render, navigate } from "tradjs/client";
 import {
   connectAndVerify,
   getWalletState,
+  tokenLabel,
   type WalletState,
 } from "@/client/wallet";
 
@@ -23,7 +24,7 @@ function App() {
           <div className="small">
             {message ||
               (state.authenticated
-                ? `${sessions.length} saved tracks · ${state.balance} $ENTRAIN`
+                ? `${sessions.length} saved tracks · ${tokenLabel(state.balance)}`
                 : "Wallet session required to list saved tracks.")}
           </div>
         </div>

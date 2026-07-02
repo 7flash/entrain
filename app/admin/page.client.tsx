@@ -140,7 +140,7 @@ function App() {
                 }}
               />
             </Field>
-            <Field label="Minimum $ENTRAIN">
+            <Field label="Minimum token balance">
               <input
                 type="number"
                 min="0"

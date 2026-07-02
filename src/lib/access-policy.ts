@@ -1,6 +1,7 @@
 import type { EntrainTemplateV1 } from "@/format/entrain-format";
 import { getAuthSession } from "./auth";
 import { cookieValue, json } from "./http";
+import { tokenAmountLabel } from "./config";
 
 export type WalletAuth = ReturnType<typeof getAuthSession>;
 export type SoundtrackAction = "view" | "play" | "export" | "clone";
@@ -51,7 +52,7 @@ export function decideSoundtrackAccess(
     return {
       ok: false,
       code: "wallet_required",
-      message: `Connect Phantom to ${verb(action)} this soundtrack. Requires ${minTokens} $ENTRAIN.`,
+      message: `Connect Phantom to ${verb(action)} this soundtrack. Requires ${tokenAmountLabel(minTokens)}.`,
       minTokens,
       balance,
       requiresWallet: true,
@@ -61,7 +62,7 @@ export function decideSoundtrackAccess(
     return {
       ok: false,
       code: "insufficient_balance",
-      message: `Requires ${minTokens} $ENTRAIN. Current verified balance: ${balance}.`,
+      message: `Requires ${tokenAmountLabel(minTokens)}. Current verified balance: ${tokenAmountLabel(balance)}.`,
       minTokens,
       balance,
       requiresWallet: false,

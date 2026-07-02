@@ -1,4 +1,5 @@
 import { soundtracksByCategory } from "@/lib/soundtracks";
+import { TOKEN_DISPLAY_NAME } from "@/lib/config";
 
 export default function SoundtracksPage() {
   const groups = soundtracksByCategory();
@@ -43,7 +44,9 @@ export default function SoundtracksPage() {
                   <span className="pill">{t.category}</span>
                   <span className={`pill tier-${t.tier}`}>{t.tier}</span>
                   <span className={t.minTokens ? "pill gate" : "pill unlocked"}>
-                    {t.minTokens ? `${t.minTokens} $ENTRAIN` : "free"}
+                    {t.minTokens
+                      ? `${t.minTokens} ${TOKEN_DISPLAY_NAME}`
+                      : "free"}
                   </span>
                   {t.lineage?.accuracy ? (
                     <span className="pill">{t.lineage.accuracy}</span>
