@@ -124,7 +124,7 @@ export function sortedKeyframes(pts: Keyframe[] | undefined) {
 }
 export function sampleTimeline(
   pts: Keyframe[] | undefined,
-  key: "beatHz" | "gainPct",
+  key: "beatHz" | "gainPct" | "carrierHz",
   tMin: number,
 ) {
   const p = sortedKeyframes(pts);
@@ -149,24 +149,27 @@ export function createLinearGlideKeyframes(
   durationMin: number,
   gainPct = 20,
   steps = 2,
+  carrierHz?: number,
 ): Keyframe[] {
   const n = Math.max(2, Math.floor(steps));
   if (n === 2)
     return [
-      { tMin: 0, beatHz: startBeat, gainPct },
-      { tMin: Math.max(0, durationMin), beatHz: endBeat, gainPct },
+      { tMin: 0, beatHz: startBeat, gainPct, carrierHz },
+      { tMin: Math.max(0, durationMin), beatHz: endBeat, gainPct, carrierHz },
     ];
   const dt = Math.max(0, durationMin) / (n - 1);
   return Array.from({ length: n }, (_, i) => ({
     tMin: i * dt,
     beatHz: startBeat + (endBeat - startBeat) * (i / (n - 1)),
     gainPct,
+    carrierHz,
   }));
 }
 
 export type Keyframe = {
   tMin: number;
   beatHz?: number;
+  carrierHz?: number;
   gainPct: number;
 };
 
@@ -351,7 +354,18 @@ function sanitizeLayer(
   )
     .map((k: any) => ({
       tMin: clampNum(k.tMin ?? k.t ?? 0, 0, durationMin),
-      beatHz: noBeat ? undefined : clampNum(k.beatHz ?? k.beat ?? 10, 0.1, 45),
+      beatHz: noBeat ? undefined : clampNum(k.beatHz ?? k.beat ?? 10, 0, 45),
+      carrierHz: noCarrier
+        ? undefined
+        : clampNum(
+            k.carrierHz ??
+              k.carrier ??
+              l?.carrierHz ??
+              l?.carrier ??
+              (type === "additive" ? 136.1 : 220),
+            20,
+            2000,
+          ),
       gainPct: clampNum(k.gainPct ?? k.gain ?? 35, 0, 100),
     }))
     .sort((a: Keyframe, b: Keyframe) => a.tMin - b.tMin);

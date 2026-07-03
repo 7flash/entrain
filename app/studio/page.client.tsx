@@ -41,6 +41,7 @@ let rebuildTimer: any = null;
 let pendingRebuildOffset: number | null = null;
 let booting = true;
 let lastShare: SharePayloadInfo | null = null;
+let activePointMin = 0;
 
 const layerTypes: LayerType[] = [
   "binaural",
@@ -248,6 +249,8 @@ function App() {
               <option value="crossfade-repeat">crossfade repeat</option>
             </select>
           </div>
+          <OperatorGuide />
+          <GlobalPointTabs />
           <div className="studio-share-box">
             <div className="eyebrow">Protocol replicator</div>
             <p className="small">
@@ -287,6 +290,9 @@ function App() {
               </button>
               <button className="act" onClick={exportJson}>
                 Export JSON
+              </button>
+              <button className="act" onClick={copyAlgorithmJson}>
+                Copy algorithm JSON
               </button>
               <button className="act" onClick={copyPatternText}>
                 Copy pattern
@@ -385,7 +391,8 @@ function LayerCard({
   key?: string;
 }) {
   const missingSample = l.type === "sample" && !engine.hasSample(l.id);
-  const firstBeat = l.keyframes[0]?.beatHz || 0;
+  const point = ensureLayerPoint(l, activePointMin);
+  const firstBeat = point.beatHz || l.keyframes[0]?.beatHz || 0;
   const color = layerColor(firstBeat, l.type);
   return (
     <div className={"studio-layer layer-" + l.type}>
@@ -399,7 +406,7 @@ function LayerCard({
             {String(index + 1).padStart(2, "0")} · {layerTypeLabel(l.type)}
           </div>
           <div className="layer-sub mono">
-            {describeLayer(l)}
+            point {activePointMin}m · {describeLayerAtPoint(l, point)}
             {missingSample ? " · file not loaded" : ""}
           </div>
         </div>
@@ -430,13 +437,32 @@ function LayerCard({
           </button>
         </div>
       </div>
-      <div className="layer-controls-grid">
+      <div className="layer-controls-grid primary-layer-controls">
+        {!isNoCarrier(l) ? (
+          <div className="field">
+            <label>
+              Carrier frequency{" "}
+              <b>{point.carrierHz || l.carrierHz || 220} Hz</b>
+            </label>
+            <input
+              type="range"
+              min="40"
+              max="1200"
+              step="1"
+              value={String(point.carrierHz || l.carrierHz || 220)}
+              onInput={(e: any) => {
+                setPointCarrier(l, Number(e.currentTarget.value));
+              }}
+            />
+          </div>
+        ) : null}
         <div className="field">
           <label>Method</label>
           <select
             value={l.type}
             onChange={(e: any) => {
               changeType(l, e.currentTarget.value as LayerType);
+              ensureLayerPoint(l, activePointMin);
               repaint(true);
             }}
           >
@@ -449,170 +475,268 @@ function LayerCard({
         </div>
         <div className="field">
           <label>
-            Gain <b>{l.keyframes[0]?.gainPct || 0}%</b>
+            Gain at point <b>{point.gainPct || 0}%</b>
           </label>
           <input
             type="range"
             min="0"
             max="100"
-            value={String(l.keyframes[0]?.gainPct || 0)}
+            value={String(point.gainPct || 0)}
             onInput={(e: any) => {
-              scaleLayerGain(l, Number(e.currentTarget.value));
+              point.gainPct = Number(e.currentTarget.value);
               repaint(true);
             }}
           />
         </div>
-        {!isNoCarrier(l) ? (
-          <div className="field">
-            <label>
-              Carrier <b>{l.carrierHz || 220} Hz</b>
-            </label>
-            <input
-              type="range"
-              min="40"
-              max="1200"
-              step="5"
-              value={String(l.carrierHz || 220)}
-              onInput={(e: any) => {
-                l.carrierHz = Number(e.currentTarget.value);
-                repaint(true);
-              }}
-            />
-          </div>
-        ) : null}
         {!isNoBeat(l) ? (
           <div className="field">
             <label>
-              Beat start <b>{l.keyframes[0]?.beatHz || 10} Hz</b>
+              Beat Hz <b>{point.beatHz ?? 10} Hz</b>
             </label>
             <input
               type="range"
               step="0.1"
-              min="0.5"
-              max="45"
-              value={String(l.keyframes[0]?.beatHz || 10)}
-              onInput={(e: any) => {
-                if (l.keyframes[0])
-                  l.keyframes[0].beatHz = Number(e.currentTarget.value);
-                repaint(true);
-              }}
-            />
-          </div>
-        ) : null}
-        {!isNoBeat(l) ? (
-          <div className="field">
-            <label>
-              Beat end{" "}
-              <b>{l.keyframes[l.keyframes.length - 1]?.beatHz || 10} Hz</b>
-            </label>
-            <input
-              type="range"
-              step="0.1"
-              min="0.5"
-              max="45"
-              value={String(l.keyframes[l.keyframes.length - 1]?.beatHz || 10)}
-              onInput={(e: any) => {
-                ensureTwoKeyframes(l);
-                l.keyframes[l.keyframes.length - 1].beatHz = Number(
-                  e.currentTarget.value,
-                );
-                repaint(true);
-              }}
-            />
-          </div>
-        ) : null}
-        {l.type === "noise" ? (
-          <div className="field">
-            <label>Noise color</label>
-            <select
-              value={l.noiseColor || "pink"}
-              onChange={(e: any) => {
-                l.noiseColor = e.currentTarget.value;
-                repaint(true);
-              }}
-            >
-              <option value="white">white</option>
-              <option value="pink">pink</option>
-              <option value="brown">brown</option>
-            </select>
-          </div>
-        ) : null}
-        {l.type === "procedural-ambience" ? <ProceduralControls l={l} /> : null}
-        {l.type === "additive" ? <AdditiveControls l={l} /> : null}
-        {l.type === "karplus" ? <KarplusControls l={l} /> : null}
-        {l.type !== "binaural" ? (
-          <div className="field">
-            <label>
-              Pan <b>{fmtPan(l.pan || 0)}</b>
-            </label>
-            <input
-              type="range"
-              min="-1"
-              max="1"
-              step="0.01"
-              value={String(l.pan || 0)}
-              onInput={(e: any) => {
-                l.pan = Number(e.currentTarget.value);
-                repaint(true);
-              }}
-            />
-          </div>
-        ) : null}
-        {l.type !== "binaural" ? (
-          <div className="field">
-            <label>
-              Pan motion{" "}
-              <b>
-                {l.panMotion?.rateHz
-                  ? l.panMotion.rateHz.toFixed(3) + " Hz"
-                  : "off"}
-              </b>
-            </label>
-            <input
-              type="range"
               min="0"
-              max="0.25"
-              step="0.005"
-              value={String(l.panMotion?.rateHz || 0)}
+              max="45"
+              value={String(point.beatHz ?? 10)}
               onInput={(e: any) => {
-                const rateHz = Number(e.currentTarget.value);
-                l.panMotion =
-                  rateHz > 0
-                    ? { rateHz, depth: l.panMotion?.depth ?? 0.35 }
-                    : undefined;
+                point.beatHz = Number(e.currentTarget.value);
                 repaint(true);
               }}
             />
           </div>
         ) : null}
-        {l.type !== "binaural" && (l.panMotion?.rateHz || 0) > 0 ? (
-          <div className="field">
-            <label>
-              Motion depth{" "}
-              <b>{Math.round((l.panMotion?.depth || 0.35) * 100)}%</b>
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={String(l.panMotion?.depth || 0.35)}
-              onInput={(e: any) => {
-                l.panMotion = {
-                  rateHz: l.panMotion?.rateHz || 0.03,
-                  depth: Number(e.currentTarget.value),
-                };
-                repaint(true);
-              }}
-            />
-          </div>
-        ) : null}
-        {l.type === "sample" ? <SampleControls l={l} /> : null}
       </div>
-      <div className="timeline-wrap">
-        <label className="small">Timeline points</label>
-        <TimelineEditor l={l} />
+      {!isNoBeat(l) ? (
+        <div className="operator-hint small">
+          Beat Hz is the amplitude-modulation cycle rate. Start low and increase
+          until separate pulses are still distinguishable; if the pulses smear
+          into one buzz, back down.
+        </div>
+      ) : null}
+      <details className="advanced-layer">
+        <summary>Advanced layer details</summary>
+        <div className="layer-controls-grid">
+          {!isNoBeat(l) ? (
+            <div className="field">
+              <label>
+                Beat at final point{" "}
+                <b>{l.keyframes[l.keyframes.length - 1]?.beatHz || 10} Hz</b>
+              </label>
+              <input
+                type="range"
+                step="0.1"
+                min="0"
+                max="45"
+                value={String(
+                  l.keyframes[l.keyframes.length - 1]?.beatHz || 10,
+                )}
+                onInput={(e: any) => {
+                  ensureTwoKeyframes(l);
+                  l.keyframes[l.keyframes.length - 1].beatHz = Number(
+                    e.currentTarget.value,
+                  );
+                  repaint(true);
+                }}
+              />
+            </div>
+          ) : null}
+          {!isNoBeat(l) ? (
+            <div className="field">
+              <label>Wave</label>
+              <select
+                value={l.wave || "sine"}
+                onChange={(e: any) => {
+                  l.wave = e.currentTarget.value;
+                  repaint(true);
+                }}
+              >
+                <option value="sine">sine</option>
+                <option value="triangle">triangle</option>
+                <option value="sawtooth">sawtooth</option>
+              </select>
+            </div>
+          ) : null}
+          {l.type === "noise" ? (
+            <div className="field">
+              <label>Noise color</label>
+              <select
+                value={l.noiseColor || "pink"}
+                onChange={(e: any) => {
+                  l.noiseColor = e.currentTarget.value;
+                  repaint(true);
+                }}
+              >
+                <option value="white">white</option>
+                <option value="pink">pink</option>
+                <option value="brown">brown</option>
+              </select>
+            </div>
+          ) : null}
+          {l.type === "procedural-ambience" ? (
+            <ProceduralControls l={l} />
+          ) : null}
+          {l.type === "additive" ? <AdditiveControls l={l} /> : null}
+          {l.type === "karplus" ? <KarplusControls l={l} /> : null}
+          {l.type !== "binaural" ? (
+            <div className="field">
+              <label>
+                Pan <b>{fmtPan(l.pan || 0)}</b>
+              </label>
+              <input
+                type="range"
+                min="-1"
+                max="1"
+                step="0.01"
+                value={String(l.pan || 0)}
+                onInput={(e: any) => {
+                  l.pan = Number(e.currentTarget.value);
+                  repaint(true);
+                }}
+              />
+            </div>
+          ) : null}
+          {l.type !== "binaural" ? (
+            <div className="field">
+              <label>
+                Pan motion{" "}
+                <b>
+                  {l.panMotion?.rateHz
+                    ? l.panMotion.rateHz.toFixed(3) + " Hz"
+                    : "off"}
+                </b>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="0.25"
+                step="0.005"
+                value={String(l.panMotion?.rateHz || 0)}
+                onInput={(e: any) => {
+                  const rateHz = Number(e.currentTarget.value);
+                  l.panMotion =
+                    rateHz > 0
+                      ? { rateHz, depth: l.panMotion?.depth ?? 0.35 }
+                      : undefined;
+                  repaint(true);
+                }}
+              />
+            </div>
+          ) : null}
+          {l.type !== "binaural" && (l.panMotion?.rateHz || 0) > 0 ? (
+            <div className="field">
+              <label>
+                Motion depth{" "}
+                <b>{Math.round((l.panMotion?.depth || 0.35) * 100)}%</b>
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                value={String(l.panMotion?.depth || 0.35)}
+                onInput={(e: any) => {
+                  l.panMotion = {
+                    rateHz: l.panMotion?.rateHz || 0.03,
+                    depth: Number(e.currentTarget.value),
+                  };
+                  repaint(true);
+                }}
+              />
+            </div>
+          ) : null}
+          {l.type === "sample" ? <SampleControls l={l} /> : null}
+        </div>
+        <div className="timeline-wrap">
+          <label className="small">
+            Raw per-layer keyframes generated from global points
+          </label>
+          <TimelineEditor l={l} />
+        </div>
+      </details>
+    </div>
+  );
+}
+
+function OperatorGuide() {
+  return (
+    <details className="operator-guide" open>
+      <summary>Operator workflow</summary>
+      <ol className="small">
+        <li>
+          Start blank. Add one tone layer. Pick a carrier frequency first with
+          method set to <b>Plain carrier</b>.
+        </li>
+        <li>
+          Listen on the actual device you will use. Laptop speakers often create
+          mechanical beating below ~210 Hz. Choose a carrier that sounds steady
+          before adding modulation.
+        </li>
+        <li>
+          Switch method to <b>Isochronic smooth</b>. Beat Hz is volume pulses
+          per second, not pitch.
+        </li>
+        <li>
+          Start near 0 Hz, then increase slowly until you can still distinguish
+          separate pulses. Stay below the point where they merge into one
+          continuous buzz.
+        </li>
+        <li>
+          Create a new point tab to clone the whole stack at a later timestamp.
+          Change carrier/beat/gain there; ENTRAIN interpolates continuously
+          between point tabs when it converts this view into the session
+          algorithm.
+        </li>
+      </ol>
+    </details>
+  );
+}
+
+function GlobalPointTabs() {
+  const times = stageTimes();
+  return (
+    <div className="global-points">
+      <div className="eyebrow">Global timeline points</div>
+      <div className="point-tabs">
+        {times.map((t) => (
+          <button
+            key={t}
+            className={
+              "point-tab " + (Math.abs(t - activePointMin) < 1e-6 ? "on" : "")
+            }
+            onClick={() => selectPoint(t)}
+          >
+            {fmtPoint(t)}
+          </button>
+        ))}
+        <button className="point-tab add" onClick={cloneCurrentPoint}>
+          + clone point
+        </button>
       </div>
+      <div className="two compact-two">
+        <div className="field">
+          <label>Active point start minute</label>
+          <input
+            type="number"
+            min="0"
+            max={String(session.durationMin)}
+            step="0.25"
+            value={String(activePointMin)}
+            onChange={(e: any) =>
+              moveActivePoint(Number(e.currentTarget.value || 0))
+            }
+          />
+        </div>
+        <div className="field">
+          <label>Segment ends at</label>
+          <input readOnly value={fmtPoint(nextPointAfter(activePointMin))} />
+        </div>
+      </div>
+      <p className="small">
+        Each point is a full snapshot of the layer stack. Between adjacent
+        points, carrier frequency, beat Hz, and gain interpolate linearly in the
+        playable ENTRAIN format.
+      </p>
     </div>
   );
 }
@@ -963,6 +1087,7 @@ function TimelineEditor({ l }: { l: EntrainLayerV1 }) {
       <thead>
         <tr>
           <th>min</th>
+          {!isNoCarrier(l) ? <th>carrier</th> : null}
           {!isNoBeat(l) ? <th>beat</th> : null}
           <th>gain</th>
           <th></th>
@@ -985,14 +1110,30 @@ function TimelineEditor({ l }: { l: EntrainLayerV1 }) {
                 }}
               />
             </td>
+            {!isNoCarrier(l) ? (
+              <td>
+                <input
+                  type="number"
+                  min="20"
+                  max="2000"
+                  step="1"
+                  value={String(k.carrierHz || l.carrierHz || 220)}
+                  onChange={(e: any) => {
+                    k.carrierHz = Number(e.currentTarget.value);
+                    if (i === 0) l.carrierHz = k.carrierHz;
+                    repaint(true);
+                  }}
+                />
+              </td>
+            ) : null}
             {!isNoBeat(l) ? (
               <td>
                 <input
                   type="number"
-                  min="0.1"
+                  min="0"
                   max="45"
                   step="0.1"
-                  value={String(k.beatHz || 10)}
+                  value={String(k.beatHz || 0)}
                   onChange={(e: any) => {
                     k.beatHz = Number(e.currentTarget.value);
                     repaint(true);
@@ -1027,20 +1168,17 @@ function TimelineEditor({ l }: { l: EntrainLayerV1 }) {
           </tr>
         ))}
         <tr>
-          <td colSpan="4">
+          <td colSpan="5">
             <button
               className="btn"
               onClick={() => {
-                const last = l.keyframes[l.keyframes.length - 1];
-                l.keyframes.push({
-                  tMin: Math.min(session.durationMin, (last?.tMin || 0) + 5),
-                  beatHz: last?.beatHz,
-                  gainPct: last?.gainPct ?? 35,
-                });
+                const t = nextSuggestedPoint();
+                addLayerPointAt(l, t, activePointMin);
+                activePointMin = t;
                 repaint(true);
               }}
             >
-              + point
+              + point from active
             </button>
           </td>
         </tr>
@@ -1102,14 +1240,20 @@ function fmtClock(sec: number) {
     : `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 function addBandLayer(hz: number) {
+  const carrier = hz >= 30 ? 300 : 220;
   session.layers.push({
     id: uid(),
-    type: "binaural",
-    carrierHz: hz >= 30 ? 300 : 220,
+    type: "iso-smooth",
+    carrierHz: carrier,
     wave: "sine",
     keyframes: [
-      { tMin: 0, beatHz: hz, gainPct: 32 },
-      { tMin: session.durationMin, beatHz: hz, gainPct: 32 },
+      { tMin: 0, carrierHz: carrier, beatHz: hz, gainPct: 32 },
+      {
+        tMin: session.durationMin,
+        carrierHz: carrier,
+        beatHz: hz,
+        gainPct: 32,
+      },
     ],
   });
   repaint(true);
@@ -1146,6 +1290,135 @@ function addProtocolGlide() {
   notice = `added ${carrier} Hz glide ${startBeat}→${endBeat} Hz over ${durationMin} min`;
   repaint(true);
 }
+
+function fmtPoint(t: number) {
+  return `${Math.round(t * 100) / 100}m`;
+}
+function stageTimes() {
+  const vals = new Set<number>([
+    0,
+    Math.round(session.durationMin * 1000) / 1000,
+  ]);
+  for (const l of session.layers)
+    for (const k of l.keyframes)
+      vals.add(Math.round((k.tMin || 0) * 1000) / 1000);
+  return [...vals]
+    .filter((t) => t >= 0 && t <= session.durationMin)
+    .sort((a, b) => a - b);
+}
+function nextPointAfter(t: number) {
+  return stageTimes().find((x) => x > t + 1e-6) ?? session.durationMin;
+}
+function selectPoint(t: number) {
+  activePointMin = t;
+  ensureStagePoint(t);
+  repaint();
+}
+function nextSuggestedPoint() {
+  return Math.min(
+    session.durationMin,
+    Math.max(
+      0,
+      activePointMin + Math.min(5, Math.max(1, session.durationMin / 4)),
+    ),
+  );
+}
+function cloneCurrentPoint() {
+  const t = Math.max(
+    0,
+    Math.min(
+      session.durationMin,
+      Number(
+        prompt("New point start minute", String(nextSuggestedPoint())) ||
+          nextSuggestedPoint(),
+      ),
+    ),
+  );
+  for (const l of session.layers) addLayerPointAt(l, t, activePointMin);
+  activePointMin = t;
+  notice = `created point at ${fmtPoint(t)} from current stack`;
+  repaint(true);
+}
+function moveActivePoint(next: number) {
+  next = Math.max(0, Math.min(session.durationMin, next));
+  const old = activePointMin;
+  for (const l of session.layers) {
+    const k = l.keyframes.find((p) => Math.abs(p.tMin - old) < 1e-6);
+    if (k) k.tMin = next;
+    l.keyframes.sort((a, b) => a.tMin - b.tMin);
+  }
+  activePointMin = next;
+  repaint(true);
+}
+function ensureStagePoint(t: number) {
+  session.layers.forEach((l) => ensureLayerPoint(l, t));
+}
+function addLayerPointAt(l: EntrainLayerV1, t: number, sourceT: number) {
+  const k = {
+    tMin: t,
+    beatHz: isNoBeat(l) ? undefined : sampleTimelineSafe(l, "beatHz", sourceT),
+    carrierHz: isNoCarrier(l)
+      ? undefined
+      : sampleTimelineSafe(l, "carrierHz", sourceT),
+    gainPct: sampleTimelineSafe(l, "gainPct", sourceT),
+  };
+  const existing = l.keyframes.find((p) => Math.abs(p.tMin - t) < 1e-6);
+  if (existing) Object.assign(existing, k);
+  else l.keyframes.push(k);
+  l.keyframes.sort((a, b) => a.tMin - b.tMin);
+  if (t === 0 && k.carrierHz) l.carrierHz = k.carrierHz;
+}
+function ensureLayerPoint(l: EntrainLayerV1, t: number) {
+  let k = l.keyframes.find((p) => Math.abs(p.tMin - t) < 1e-6);
+  if (!k) {
+    addLayerPointAt(l, t, t);
+    k = l.keyframes.find((p) => Math.abs(p.tMin - t) < 1e-6)!;
+  }
+  if (!isNoCarrier(l) && !k.carrierHz)
+    k.carrierHz = l.carrierHz || (l.type === "additive" ? 136.1 : 220);
+  if (!isNoBeat(l) && k.beatHz == null) k.beatHz = 10;
+  return k;
+}
+function sampleTimelineSafe(
+  l: EntrainLayerV1,
+  key: "beatHz" | "gainPct" | "carrierHz",
+  t: number,
+) {
+  if (key === "carrierHz") {
+    const sorted = [...l.keyframes].sort((a, b) => a.tMin - b.tMin);
+    if (sorted.every((k) => k.carrierHz == null))
+      return l.carrierHz || (l.type === "additive" ? 136.1 : 220);
+  }
+  // Local copy to avoid importing sampleTimeline into this client twice in older bundles.
+  const pts = [...l.keyframes].sort((a, b) => a.tMin - b.tMin);
+  if (!pts.length)
+    return key === "gainPct"
+      ? 35
+      : key === "carrierHz"
+        ? l.carrierHz || 220
+        : 10;
+  const val = (p: any) =>
+    Number(
+      p[key] ??
+        (key === "carrierHz" ? l.carrierHz : key === "beatHz" ? 10 : 35),
+    );
+  if (t <= pts[0].tMin) return val(pts[0]);
+  for (let i = 1; i < pts.length; i++)
+    if (t <= pts[i].tMin) {
+      const a = pts[i - 1],
+        b = pts[i],
+        f = (t - a.tMin) / Math.max(1e-9, b.tMin - a.tMin);
+      return val(a) + (val(b) - val(a)) * f;
+    }
+  return val(pts[pts.length - 1]);
+}
+function setPointCarrier(l: EntrainLayerV1, value: number) {
+  const p = ensureLayerPoint(l, activePointMin);
+  p.carrierHz = value;
+  if (activePointMin === 0 || !l.carrierHz) l.carrierHz = value;
+  repaint(true);
+}
+
 function syncLiveReadouts() {
   const elapsed = engine.positionSec();
   const t = document.getElementById("studio-timer");
@@ -1169,6 +1442,18 @@ function syncLiveReadouts() {
   }
 }
 
+function describeLayerAtPoint(l: EntrainLayerV1, p: any) {
+  if (l.type === "binaural") {
+    const c = p.carrierHz || l.carrierHz || 220,
+      b = p.beatHz || 0;
+    return `${b} Hz · L/R ${fmtHz(c - b / 2)} / ${fmtHz(c + b / 2)} Hz`;
+  }
+  if (!isNoBeat(l))
+    return `${p.beatHz || 0} Hz beat · carrier ${p.carrierHz || l.carrierHz || 220} Hz`;
+  if (!isNoCarrier(l))
+    return `${p.carrierHz || l.carrierHz || 220} Hz carrier · gain ${p.gainPct || 0}%`;
+  return describeLayer(l);
+}
 function describeLayer(l: EntrainLayerV1) {
   if (l.type === "sample")
     return `${l.sampleName || "load a file"} · ${l.sampleLoop?.mode || "native"} loop`;
@@ -1280,14 +1565,16 @@ function changeType(l: EntrainLayerV1, type: LayerType) {
 function addLayer() {
   session.layers.push({
     id: uid(),
-    type: "binaural",
+    type: "carrier",
     carrierHz: 220,
     wave: "sine",
     keyframes: [
-      { tMin: 0, beatHz: 10, gainPct: 35 },
-      { tMin: session.durationMin, beatHz: 10, gainPct: 35 },
+      { tMin: 0, carrierHz: 220, gainPct: 35 },
+      { tMin: session.durationMin, carrierHz: 220, gainPct: 35 },
     ],
   });
+  notice =
+    "added plain carrier; verify it sounds steady, then switch method to isochronic smooth";
   repaint(true);
 }
 function addNoise() {
@@ -1428,6 +1715,13 @@ function exportJson() {
     new Blob([JSON.stringify(session, null, 2)], { type: "application/json" }),
     session.name.replace(/\W+/g, "_") + ".entrain.json",
   );
+}
+async function copyAlgorithmJson() {
+  await navigator.clipboard
+    .writeText(JSON.stringify(sanitizeSession(session), null, 2))
+    .catch(() => {});
+  notice = "playable ENTRAIN algorithm JSON copied";
+  repaint();
 }
 async function copyPatternText() {
   await navigator.clipboard
@@ -1663,6 +1957,8 @@ async function saveServer() {
   repaint();
 }
 function repaint(rebuild = false) {
+  if (activePointMin > session.durationMin)
+    activePointMin = session.durationMin;
   if (rebuild && engine.running) scheduleEngineRebuild();
   scheduleLocalAutosave();
   render(<App />, document.getElementById("studio-root")!);

@@ -43,7 +43,7 @@ export function createAudioEngine(getSession: () => EntrainSessionV1) {
   function scheduleParam(
     param: AudioParam,
     pts: Keyframe[],
-    key: "beatHz" | "gainPct",
+    key: "beatHz" | "gainPct" | "carrierHz",
     map: (x: number) => number,
     start: number,
     durSec: number,
@@ -57,6 +57,40 @@ export function createAudioEngine(getSession: () => EntrainSessionV1) {
       param.linearRampToValueAtTime(map(Number(p[key] || 0)), start + rel);
     }
   }
+
+  function layerCarrierAt(l: EntrainLayerV1, tMin: number) {
+    return (
+      sampleTimeline(l.keyframes, "carrierHz", tMin) ||
+      l.carrierHz ||
+      (l.type === "additive" ? 136.1 : 220)
+    );
+  }
+  function layerBeatAt(l: EntrainLayerV1, tMin: number) {
+    return sampleTimeline(l.keyframes, "beatHz", tMin);
+  }
+  function scheduleDerivedFrequency(
+    param: AudioParam,
+    l: EntrainLayerV1,
+    map: (carrier: number, beat: number) => number,
+    start: number,
+    durSec: number,
+    offsetSec = 0,
+  ) {
+    const offsetMin = Math.max(0, offsetSec) / 60;
+    param.setValueAtTime(
+      map(layerCarrierAt(l, offsetMin), layerBeatAt(l, offsetMin)),
+      start,
+    );
+    for (const p of sortedKeyframes(l.keyframes)) {
+      const rel = p.tMin * 60 - offsetSec;
+      if (rel <= 0.01 || rel > durSec) continue;
+      param.linearRampToValueAtTime(
+        map(layerCarrierAt(l, p.tMin), layerBeatAt(l, p.tMin)),
+        start + rel,
+      );
+    }
+  }
+
   function audibleLayers(session: EntrainSessionV1) {
     const solo = session.layers.some((l) => l.solo);
     return session.layers.filter((l) => !l.mute && (!solo || l.solo));
@@ -165,32 +199,38 @@ export function createAudioEngine(getSession: () => EntrainSessionV1) {
     if (l.type === "carrier") {
       const o = ctx.createOscillator();
       o.type = "sine";
-      o.frequency.value = l.carrierHz || 220;
+      scheduleParam(
+        o.frequency,
+        l.keyframes,
+        "carrierHz",
+        (hz) => clamp(hz || l.carrierHz || 220, 20, 2000),
+        start,
+        durSec,
+        offsetSec,
+      );
       o.connect(input);
       o.start(start);
       o.stop(stopAt);
       stops.push(o);
       return { node: layerGain, stops };
     }
-    const carrier = clamp(l.carrierHz || 220, 20, 2000);
+    const carrier = clamp(layerCarrierAt(l, offsetSec / 60), 20, 2000);
     if (l.type === "binaural" || l.type === "monaural") {
       const a = ctx.createOscillator(),
         b = ctx.createOscillator();
       a.type = b.type = l.wave || "sine";
-      scheduleParam(
+      scheduleDerivedFrequency(
         a.frequency,
-        l.keyframes,
-        "beatHz",
-        (hz) => Math.max(20, carrier - hz / 2),
+        l,
+        (carrier, beat) => Math.max(20, clamp(carrier, 20, 2000) - beat / 2),
         start,
         durSec,
         offsetSec,
       );
-      scheduleParam(
+      scheduleDerivedFrequency(
         b.frequency,
-        l.keyframes,
-        "beatHz",
-        (hz) => Math.max(20, carrier + hz / 2),
+        l,
+        (carrier, beat) => Math.max(20, clamp(carrier, 20, 2000) + beat / 2),
         start,
         durSec,
         offsetSec,
@@ -220,7 +260,15 @@ export function createAudioEngine(getSession: () => EntrainSessionV1) {
     }
     const car = ctx.createOscillator();
     car.type = l.wave || "sine";
-    car.frequency.value = carrier;
+    scheduleParam(
+      car.frequency,
+      l.keyframes,
+      "carrierHz",
+      (hz) => clamp(hz || carrier, 20, 2000),
+      start,
+      durSec,
+      offsetSec,
+    );
     const amp = ctx.createGain();
     amp.gain.value = 0;
     const lfo = ctx.createOscillator();
@@ -229,7 +277,7 @@ export function createAudioEngine(getSession: () => EntrainSessionV1) {
       lfo.frequency,
       l.keyframes,
       "beatHz",
-      (hz) => Math.max(0.1, hz),
+      (hz) => Math.max(0, hz),
       start,
       durSec,
       offsetSec,
