@@ -4,7 +4,11 @@ import type {
   EntrainSessionV1,
   LayerType,
 } from "@/format/entrain-format";
-import { defaultSession, sanitizeSession } from "@/format/entrain-format";
+import {
+  defaultSession,
+  sanitizeSession,
+  sessionNeedsLocalFiles,
+} from "@/format/entrain-format";
 import { analyzeSession } from "@/format/protocol-analyzer";
 import {
   sessionToPatternText,
@@ -14,7 +18,7 @@ import {
   looksLikeSbagen,
 } from "@/format/pattern-text";
 import { createAudioEngine } from "@/client/audio-engine";
-import { decodeSessionHash, encodeSessionHash } from "@/client/session-codec";
+import { decodeSessionHash, encodeSessionUrl } from "@/client/session-codec";
 import { connectAndVerify } from "@/client/wallet";
 
 let session: EntrainSessionV1 = defaultSession();
@@ -22,6 +26,8 @@ let engine = createAudioEngine(() => session);
 let status = "idle";
 let notice = "";
 let exportBusy = false;
+let autosaveTimer: any = null;
+let booting = true;
 
 const layerTypes: LayerType[] = [
   "binaural",
@@ -219,51 +225,77 @@ function App() {
             </select>
           </div>
           <AnalysisCard analysis={analysis} />
-          <div className="studio-file-actions">
-            <button className="act" onClick={copyShareUrl}>
-              Copy share URL
-            </button>
-            <button className="act" onClick={saveServer}>
-              Save private
-            </button>
-            <button className="act" onClick={publishCurrent}>
-              Publish / sell
-            </button>
-            <button className="act" onClick={sendAdminDraft}>
-              Admin draft
-            </button>
-            <button className="act" onClick={exportJson}>
-              Export JSON
-            </button>
-            <button className="act" onClick={copyPatternText}>
-              Copy pattern
-            </button>
-            <button className="act" onClick={copySbagenText}>
-              Copy SBaGen
-            </button>
-            <label className="act file-act">
-              Import JSON
-              <input
-                type="file"
-                accept=".json,application/json"
-                style={{ display: "none" }}
-                onChange={importJson}
-              />
-            </label>
-            <label className="act file-act">
-              Import pattern/SBaGen
-              <input
-                type="file"
-                accept=".txt,.sbagen,text/plain"
-                style={{ display: "none" }}
-                onChange={importPatternText}
-              />
-            </label>
+          <div className="studio-share-box">
+            <div className="eyebrow">No-login studio</div>
+            <p className="small">
+              Play, edit, render WAV, import/export, and share anonymously
+              without connecting a wallet. The URL payload lives after{" "}
+              <span className="mono">#</span>, so it is not sent to the server.
+            </p>
+            <div className="studio-file-actions local-first-actions">
+              <button className="act primary" onClick={copyShareUrl}>
+                Copy exact private URL
+              </button>
+              <button className="act" onClick={exportJson}>
+                Export JSON
+              </button>
+              <button className="act" onClick={copyPatternText}>
+                Copy pattern
+              </button>
+              <button className="act" onClick={copySbagenText}>
+                Copy SBaGen
+              </button>
+              <label className="act file-act">
+                Import JSON
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  style={{ display: "none" }}
+                  onChange={importJson}
+                />
+              </label>
+              <label className="act file-act">
+                Import pattern/SBaGen
+                <input
+                  type="file"
+                  accept=".txt,.sbagen,text/plain"
+                  style={{ display: "none" }}
+                  onChange={importPatternText}
+                />
+              </label>
+            </div>
+            {sessionNeedsLocalFiles(session) ? (
+              <p className="small warntext">
+                Local ambience files cannot be embedded in a private URL. Use
+                procedural ambience when the exact same soundtrack must
+                reproduce for a friend with no extra files.
+              </p>
+            ) : (
+              <p className="small">
+                This session is portable: all stochastic layers use stored
+                seeds, so friends can reproduce the same generated algorithm
+                from the URL.
+              </p>
+            )}
           </div>
-          <p className="small">
-            Ambience files stay local. Saved/share formats preserve the filename
-            and loop settings, not the audio buffer.
-          </p>
+          <details className="studio-account-box">
+            <summary>Wallet/cloud actions</summary>
+            <div className="studio-file-actions">
+              <button className="act" onClick={saveServer}>
+                Save to private cloud library
+              </button>
+              <button className="act" onClick={publishCurrent}>
+                Publish / sell
+              </button>
+              <button className="act" onClick={sendAdminDraft}>
+                Admin draft
+              </button>
+            </div>
+            <p className="small">
+              These actions connect Phantom only when clicked. The editor itself
+              remains local-first.
+            </p>
+          </details>
         </aside>
 
         <section className="studio-layers">
@@ -926,6 +958,7 @@ function addNoise() {
     id: uid(),
     type: "noise",
     noiseColor: "pink",
+    seed: Math.floor(Math.random() * 999999) + 1,
     pan: 0,
     panMotion: { rateHz: 0.02, depth: 0.16 },
     keyframes: [
@@ -1074,12 +1107,13 @@ async function importPatternText(e: any) {
   repaint();
 }
 async function copyShareUrl() {
-  const h = await encodeSessionHash(session);
-  const url = location.origin + location.pathname + h;
-  await navigator.clipboard.writeText(url).catch(() => {});
-  history.replaceState(null, "", h);
-  notice =
-    "share URL copied; ambience files still need to be reloaded by the recipient";
+  const info = await encodeSessionUrl(session);
+  await navigator.clipboard.writeText(info.url).catch(() => {});
+  history.replaceState(null, "", info.hash);
+  notice = info.portable
+    ? `exact private URL copied · ${info.encoding} · ${Math.ceil(info.bytes / 1024)} KB`
+    : `private URL copied, but local audio files must be reloaded · ${Math.ceil(info.bytes / 1024)} KB`;
+  if (info.warnings.length) notice += " · " + info.warnings[0];
   repaint();
 }
 
@@ -1175,7 +1209,20 @@ async function saveServer() {
 }
 function repaint(rebuild = false) {
   if (rebuild && engine.running) engine.rebuild();
+  scheduleLocalAutosave();
   render(<App />, document.getElementById("studio-root")!);
+}
+function scheduleLocalAutosave() {
+  if (booting) return;
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(
+        "entrain:studio-autosave",
+        JSON.stringify(sanitizeSession(session)),
+      );
+    } catch {}
+  }, 250);
 }
 function draw() {
   if (!engine.running) return;
@@ -1188,15 +1235,28 @@ function draw() {
 }
 
 export default async function mount() {
-  const shared = await decodeSessionHash().catch(() => null);
-  const raw = sessionStorage.getItem("entrain:loaded-session");
+  booting = true;
+  const shared = await decodeSessionHash().catch((e: any) => {
+    notice = e.message || "could not load shared URL";
+    return null;
+  });
+  const handoff = sessionStorage.getItem("entrain:loaded-session");
+  const autosaved = localStorage.getItem("entrain:studio-autosave");
   if (shared) {
     session = shared;
-    notice = "loaded shared URL";
-  } else if (raw) {
-    session = sanitizeSession(JSON.parse(raw));
+    notice = sessionNeedsLocalFiles(session)
+      ? "loaded shared URL; reload local ambience files to match sender"
+      : "loaded exact private URL";
+  } else if (handoff) {
+    session = sanitizeSession(JSON.parse(handoff));
+    notice = "loaded soundtrack into studio";
+  } else if (autosaved) {
+    session = sanitizeSession(JSON.parse(autosaved));
+    notice = "restored local browser draft";
   }
+  booting = false;
   render(<App />, document.getElementById("studio-root")!);
+  scheduleLocalAutosave();
   return () => {
     engine.stop();
     render(null, document.getElementById("studio-root")!);
