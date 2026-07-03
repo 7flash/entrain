@@ -159,6 +159,8 @@ function App() {
         </div>
       </div>
 
+      <QuickWorkflow analysis={analysis} />
+
       <div className="studio-workbench">
         <aside className="studio-side">
           <div className="eyebrow">Session</div>
@@ -250,6 +252,7 @@ function App() {
               <option value="crossfade-repeat">crossfade repeat</option>
             </select>
           </div>
+          <QuickBuilder />
           <OperatorGuide />
           <GlobalPointTabs />
           <div className="studio-share-box">
@@ -374,9 +377,13 @@ function App() {
               mute / solo / duplicate / edit each layer
             </div>
           </div>
-          {session.layers.map((l, index) => (
-            <LayerCard l={l} index={index} key={l.id} />
-          ))}
+          {session.layers.length ? (
+            session.layers.map((l, index) => (
+              <LayerCard l={l} index={index} key={l.id} />
+            ))
+          ) : (
+            <EmptyStudioState />
+          )}
         </section>
       </div>
     </div>
@@ -429,6 +436,9 @@ function LayerCard({
             }}
           >
             Solo
+          </button>
+          <button className="act tiny" onClick={() => auditionLayer(l.id)}>
+            Audition
           </button>
           <button className="act tiny" onClick={() => duplicateLayer(l.id)}>
             Dup
@@ -508,6 +518,7 @@ function LayerCard({
           </div>
         ) : null}
       </div>
+      <LayerHealth l={l} point={point} />
       {!isNoBeat(l) ? (
         <div className="operator-hint small">
           Beat Hz is the amplitude-modulation cycle rate. Start low and increase
@@ -656,6 +667,150 @@ function LayerCard({
           <TimelineEditor l={l} />
         </div>
       </details>
+    </div>
+  );
+}
+
+function QuickWorkflow({
+  analysis,
+}: {
+  analysis: ReturnType<typeof analyzeSession>;
+}) {
+  const phase = workflowPhase();
+  return (
+    <div className="ux-workflow">
+      <div
+        className={
+          "ux-step " +
+          (phase === "carrier" ? "on" : phase === "blank" ? "next" : "done")
+        }
+      >
+        <span className="ux-step-num">1</span>
+        <div>
+          <b>Carrier check</b>
+          <span>choose a steady tone on the real speakers/headphones</span>
+        </div>
+      </div>
+      <div
+        className={
+          "ux-step " +
+          (phase === "pulse"
+            ? "on"
+            : phase === "blank" || phase === "carrier"
+              ? "next"
+              : "done")
+        }
+      >
+        <span className="ux-step-num">2</span>
+        <div>
+          <b>Pulse threshold</b>
+          <span>switch to iso trap/smooth and tune beat Hz</span>
+        </div>
+      </div>
+      <div
+        className={
+          "ux-step " +
+          (phase === "timeline" ? "on" : phase === "ready" ? "done" : "next")
+        }
+      >
+        <span className="ux-step-num">3</span>
+        <div>
+          <b>Arc & export</b>
+          <span>clone point tabs, analyze, share or render</span>
+        </div>
+      </div>
+      <div
+        className={
+          "ux-meter " +
+          (analysis.issues.some((i) => i.level === "error")
+            ? "bad"
+            : analysis.mixStatus === "hot"
+              ? "warn"
+              : "ok")
+        }
+      >
+        <b>{analysis.mixStatus}</b>
+        <span>{analysis.estimatedPeakDb.toFixed(1)} dBFS</span>
+      </div>
+    </div>
+  );
+}
+
+function QuickBuilder() {
+  return (
+    <div className="quick-builder">
+      <div className="eyebrow">Start here</div>
+      <div className="quick-grid">
+        <button className="quick-card" onClick={() => applyStarter("carrier")}>
+          <b>Carrier check</b>
+          <span>One plain tone at 220 Hz. Verify no speaker beating.</span>
+        </button>
+        <button
+          className="quick-card"
+          onClick={() => applyStarter("countable")}
+        >
+          <b>Countable pulses</b>
+          <span>Iso trap at 6 Hz. Best for separate-pulse focus.</span>
+        </button>
+        <button className="quick-card" onClick={() => applyStarter("buzz")}>
+          <b>Focus buzz</b>
+          <span>Iso trap at 14 Hz. Fused SMR/beta style.</span>
+        </button>
+        <button className="quick-card" onClick={() => applyStarter("descent")}>
+          <b>Descent arc</b>
+          <span>10 → 6 → 3 Hz with a portable ambience bed.</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function EmptyStudioState() {
+  return (
+    <div className="empty-studio">
+      <div className="empty-orb" />
+      <h2>Build from a steady carrier.</h2>
+      <p className="small">
+        The fastest reliable workflow is carrier first, modulation second,
+        timeline third. Add a plain carrier, listen for unwanted speaker
+        beating, then switch to isochronic trap or smooth.
+      </p>
+      <div className="btnrow">
+        <button className="act primary" onClick={() => applyStarter("carrier")}>
+          Start carrier check
+        </button>
+        <button className="act" onClick={() => applyStarter("countable")}>
+          Start countable pulses
+        </button>
+        <button className="act" onClick={() => applyStarter("descent")}>
+          Start descent arc
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function LayerHealth({ l, point }: { l: EntrainLayerV1; point: any }) {
+  const beat = Number(point.beatHz || 0);
+  const carrier = Number(point.carrierHz || l.carrierHz || 0);
+  const tags: string[] = [];
+  if (l.type === "carrier" && carrier && carrier < 210)
+    tags.push("check speaker beating");
+  if (!isNoBeat(l)) {
+    if (beat > 0 && beat < 4) tags.push("slow / meditative");
+    else if (beat <= 8) tags.push("countable pulses");
+    else if (beat < 13) tags.push("near fusion");
+    else tags.push("fused buzz");
+  }
+  if (l.type === "binaural") tags.push("headphones only");
+  if (l.type === "sample" && !engine.hasSample(l.id))
+    tags.push("reload local file");
+  if (!tags.length) return null;
+  return (
+    <div className="layer-health mono">
+      {tags.map((t) => (
+        <span key={t}>{t}</span>
+      ))}
     </div>
   );
 }
@@ -1728,6 +1883,151 @@ function bowlPartialsUi() {
     { ratio: 2.001, gain: 0.32, detuneCents: -3 },
   ];
 }
+
+function workflowPhase() {
+  if (!session.layers.length) return "blank";
+  const hasTone = session.layers.some((l) => l.type === "carrier");
+  const hasPulse = session.layers.some(
+    (l) =>
+      l.type.startsWith("iso") ||
+      l.type === "monaural" ||
+      l.type === "binaural",
+  );
+  const hasMultiplePoints = stageTimes().length > 1;
+  if (hasTone && !hasPulse) return "carrier";
+  if (hasPulse && !hasMultiplePoints) return "pulse";
+  if (hasMultiplePoints) return "timeline";
+  return "ready";
+}
+
+function applyStarter(kind: "carrier" | "countable" | "buzz" | "descent") {
+  engine.stop();
+  status = "idle";
+  activePointMin = 0;
+  if (kind === "carrier") {
+    session = sanitizeSession({
+      ...defaultSession(),
+      name: "Carrier check",
+      durationMin: 10,
+      layers: [
+        {
+          id: uid(),
+          type: "carrier",
+          carrierHz: 220,
+          wave: "sine",
+          keyframes: [
+            { tMin: 0, carrierHz: 220, gainPct: 35 },
+            { tMin: 10, carrierHz: 220, gainPct: 35 },
+          ],
+        },
+      ],
+    });
+    notice =
+      "carrier check loaded — listen for unwanted beating before adding modulation";
+  } else if (kind === "countable") {
+    session = sanitizeSession({
+      ...defaultSession(),
+      name: "Countable pulse drill",
+      durationMin: 12,
+      loop: { mode: "hold-last" },
+      layers: [
+        {
+          id: uid(),
+          type: "iso-trap",
+          carrierHz: 340,
+          wave: "sine",
+          isoPulse: { edgeMs: 8, duty: 0.45 },
+          keyframes: [
+            { tMin: 0, carrierHz: 340, beatHz: 6, gainPct: 38 },
+            { tMin: 12, carrierHz: 340, beatHz: 6, gainPct: 38 },
+          ],
+        },
+      ],
+    });
+    notice =
+      "countable-pulse starter loaded — tune beat Hz until pulses are distinct but comfortable";
+  } else if (kind === "buzz") {
+    session = sanitizeSession({
+      ...defaultSession(),
+      name: "Focus buzz starter",
+      durationMin: 18,
+      loop: { mode: "hold-last" },
+      layers: [
+        {
+          id: uid(),
+          type: "iso-trap",
+          carrierHz: 340,
+          wave: "sine",
+          isoPulse: { edgeMs: 5, duty: 0.5 },
+          keyframes: [
+            { tMin: 0, carrierHz: 340, beatHz: 12, gainPct: 30 },
+            { tMin: 18, carrierHz: 360, beatHz: 16, gainPct: 28 },
+          ],
+        },
+        {
+          id: uid(),
+          type: "procedural-ambience",
+          ambienceRecipe: "brown-room",
+          seed: 4242,
+          pan: 0,
+          keyframes: [
+            { tMin: 0, gainPct: 12 },
+            { tMin: 18, gainPct: 12 },
+          ],
+        },
+      ],
+    });
+    notice =
+      "focus-buzz starter loaded — this is fused modulation, not a count-the-pulses drill";
+  } else {
+    session = sanitizeSession({
+      ...defaultSession(),
+      name: "Gentle descent arc",
+      durationMin: 24,
+      loop: { mode: "hold-last" },
+      layers: [
+        {
+          id: uid(),
+          type: "iso-smooth",
+          carrierHz: 300,
+          wave: "sine",
+          keyframes: [
+            { tMin: 0, carrierHz: 300, beatHz: 10, gainPct: 24 },
+            { tMin: 12, carrierHz: 280, beatHz: 6, gainPct: 22 },
+            { tMin: 24, carrierHz: 260, beatHz: 3, gainPct: 18 },
+          ],
+        },
+        {
+          id: uid(),
+          type: "procedural-ambience",
+          ambienceRecipe: "heavy-rain-bowls",
+          seed: 9001,
+          pan: 0,
+          panMotion: { rateHz: 0.018, depth: 0.18 },
+          keyframes: [
+            { tMin: 0, gainPct: 20 },
+            { tMin: 24, gainPct: 24 },
+          ],
+        },
+      ],
+    });
+    notice = "descent starter loaded — point tabs show the glide arc";
+  }
+  engine = createAudioEngine(() => session);
+  repaint(true);
+}
+
+function auditionLayer(id: string) {
+  const target = session.layers.find((l) => l.id === id);
+  if (!target) return;
+  session.layers.forEach((l) => {
+    l.solo = l.id === id;
+    l.mute = false;
+  });
+  notice = `auditioning ${layerTypeLabel(target.type)} only — clear Solo to restore full stack`;
+  repaint(true);
+}
+
 function duplicateLayer(id: string) {
   const l = session.layers.find((x) => x.id === id);
   if (!l) return;

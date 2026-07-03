@@ -1,3 +1,44 @@
+# ENTRAIN TradJS Server v0.25
+
+Studio UI/UX pass.
+
+- Added a three-step workflow strip: carrier check → pulse threshold → timeline/export.
+- Added quick-start cards for carrier check, countable pulses, focus buzz, and descent arc.
+- Added polished empty-state guidance so a blank Studio starts from the operator workflow instead of a wall of controls.
+- Added per-layer health chips such as `check speaker beating`, `countable pulses`, `fused buzz`, and `headphones only`.
+- Added one-click layer audition: solo a layer from its card while preserving no-login local editing.
+- Kept advanced synthesis controls collapsed so the default surface stays focused on carrier, method, gain, and beat Hz.
+
+Local run:
+
+```bash
+bun install
+cp .env.example .env
+bun run sync:soundtracks
+bun run dev
+```
+
+# ENTRAIN TradJS Server v0.24
+
+Isochronic pulse shaping pass.
+
+- Added **Isochronic trap** as a third pulse mode between smooth and hard.
+- Trap mode uses raised-edge trapezoid gates with true silent gaps, default `edgeMs=8` and `duty=0.45`.
+- Added Studio controls for pulse edge and pulse duty under Advanced layer details.
+- Band quick-add now creates trap isochronic layers by default for crisp countable pulses.
+- Operator guide now explains the practical tension between countable theta pulses, fused SMR/beta focus buzz, and Holosync-style descending meditation arcs.
+- Compact pattern text now round-trips `iso-trap carrier=... beat=... edge=8ms duty=0.45`.
+- Signal maps identify trap isochronic layers and describe the gate formula.
+
+Local run:
+
+```bash
+bun install
+cp .env.example .env
+bun run sync:soundtracks
+bun run dev
+```
+
 # ENTRAIN TradJS Server v0.23
 
 Studio workflow now uses operator-first carrier checks and global point tabs.
