@@ -20,3 +20,6 @@ export const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "";
 export function tokenAmountLabel(amount: number | string) {
   return `${amount} ${TOKEN_DISPLAY_NAME}`;
 }
+
+// Temporary product mode: all catalogue rows are public/free and wallet/payment UI is hidden unless explicitly disabled.
+export const PUBLIC_FREE_MODE = process.env.PUBLIC_FREE_MODE !== "0";

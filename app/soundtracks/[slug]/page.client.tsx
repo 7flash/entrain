@@ -18,7 +18,7 @@ let slug = "";
 let session: EntrainSessionV1 | null = null;
 let engine = createAudioEngine(() => session!);
 let wallet: WalletState = { authenticated: false, publicKey: null, balance: 0 };
-let message = "Load this soundtrack to check access.";
+let message = "Loading public soundtrack…";
 let busy = false;
 let exportMinutes = 30;
 let repetitions = 1;
@@ -47,23 +47,10 @@ function App() {
         <div>
           <strong>{loadedTitle || "Soundtrack player"}</strong>
           <div className="small">{message}</div>
-          {wallet.authenticated ? (
-            <div className="small">
-              Wallet {wallet.publicKey?.slice(0, 4)}…
-              {wallet.publicKey?.slice(-4)} · {tokenLabel(wallet.balance)}
-            </div>
-          ) : null}
         </div>
         <div className="tagrow">
           <button className="btn primary" disabled={busy} onClick={unlock}>
-            {session ? "Reload access" : "Unlock / load"}
-          </button>
-          <button
-            className="btn"
-            disabled={busy || !!session}
-            onClick={buyThenUnlock}
-          >
-            Buy access
+            {session ? "Reload soundtrack" : "Load soundtrack"}
           </button>
           <button
             className="btn"
@@ -79,23 +66,55 @@ function App() {
           >
             Clone to editor
           </button>
-          <button
-            className="btn"
-            disabled={busy || locked}
-            onClick={saveToLibrary}
-          >
-            Clone to private library
-          </button>
         </div>
       </div>
 
+      {session ? <PlayerRuntime /> : <LockedPlayerHint />}
+
+      {session ? <UnlockedSignalMap session={session} /> : null}
+
+      {session ? (
+        <p className="small">
+          Exact-length export follows the soundtrack loop rule: hold-last for
+          descents, repeat/crossfade-repeat for loops. Repetition export renders
+          pattern length × repetitions. Ambience/sample rows keep filename and
+          loop metadata, but the local audio file must be loaded in the editor
+          before it can appear in exports.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function LockedPlayerHint() {
+  return (
+    <div className="locked-player-hint">
+      <div className="locked-orb" />
+      <div>
+        <strong>Loading local generator.</strong>
+        <p className="small">
+          Public/free mode is enabled. The exact ENTRAIN algorithm is available
+          without wallet authorization.
+        </p>
+        <p className="small">
+          Audio is synthesized locally in this browser; the server only returns
+          the JSON pattern.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function PlayerRuntime() {
+  return (
+    <div className="player-runtime">
       <div className="scope" style={{ margin: "12px 0" }}>
         <canvas id="soundtrack-scope" />
       </div>
 
-      <GroupListenCard locked={locked} />
+      <GroupListenCard locked={false} />
 
-      <div className="two">
+      <div className="two export-grid-mobile">
         <div className="field">
           <label>Export exact length, minutes</label>
           <input
@@ -109,11 +128,7 @@ function App() {
               paint();
             }}
           />
-          <button
-            className="btn"
-            disabled={busy || locked}
-            onClick={exportLength}
-          >
+          <button className="btn" disabled={busy} onClick={exportLength}>
             {busy ? "Rendering…" : "Render exact length"}
           </button>
         </div>
@@ -130,25 +145,11 @@ function App() {
               paint();
             }}
           />
-          <button
-            className="btn"
-            disabled={busy || locked}
-            onClick={exportRepeats}
-          >
+          <button className="btn" disabled={busy} onClick={exportRepeats}>
             {busy ? "Rendering…" : "Render repetitions"}
           </button>
         </div>
       </div>
-
-      {session ? <UnlockedSignalMap session={session} /> : null}
-
-      <p className="small">
-        Exact-length export follows the soundtrack loop rule: hold-last for
-        descents, repeat/crossfade-repeat for loops. Repetition export renders
-        pattern length × repetitions. Ambience/sample rows keep filename and
-        loop metadata, but the local audio file must be loaded in the editor
-        before it can appear in exports.
-      </p>
     </div>
   );
 }
@@ -446,7 +447,7 @@ async function unlock() {
     loadedTitle = res.template.title || session.name;
     engine.stop();
     engine = createAudioEngine(() => session!);
-    message = `loaded. Loop mode: ${session.loop?.mode || "hold-last"}. You can play forever, export WAV, clone it, or join a group room.`;
+    message = `loaded free/public soundtrack. Loop mode: ${session.loop?.mode || "hold-last"}. You can play forever, export WAV, clone it, or join a group room.`;
   } catch (e: any) {
     message = e.message || "unlock failed";
   } finally {
@@ -838,6 +839,42 @@ function downloadBlob(blob: Blob, filename: string) {
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
+
+function resetPlayerState(nextSlug: string) {
+  if (pollTimer) clearInterval(pollTimer);
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  if (roomId)
+    fetch(
+      `/api/sync/rooms/${encodeURIComponent(roomId)}/presence?clientId=${encodeURIComponent(clientId)}`,
+      { method: "DELETE" },
+    ).catch(() => {});
+  try {
+    engine.stop();
+  } catch {}
+  slug = nextSlug;
+  session = null;
+  engine = createAudioEngine(() => session!);
+  message = "Loading public soundtrack…";
+  busy = false;
+  exportMinutes = 30;
+  repetitions = 1;
+  loadedTitle = "";
+  wallet = { authenticated: false, publicKey: null, balance: 0 };
+  roomId = "";
+  roomHostKey = "";
+  room = null;
+  syncMessage =
+    "Create or join a room so everyone hears the same soundtrack position.";
+  syncBusy = false;
+  syncFollowing = false;
+  syncSignature = "";
+  pollTimer = null;
+  heartbeatTimer = null;
+  clockOffsetMs = 0;
+  clockRttMs = 0;
+  lastDriftSec = 0;
+}
+
 function paint() {
   render(<App />, document.getElementById("soundtrack-player-root")!);
 }
@@ -852,8 +889,7 @@ function draw() {
 
 export default async function mount() {
   const root = document.getElementById("soundtrack-player-root")!;
-  slug = root.dataset.slug || "";
-  wallet = await getWalletState().catch(() => wallet);
+  resetPlayerState(root.dataset.slug || "");
   const params = new URLSearchParams(location.search);
   const initialRoom = (params.get("room") || "").toUpperCase();
   paint();

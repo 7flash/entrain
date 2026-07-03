@@ -2,18 +2,22 @@ export default function CreatorPage() {
   return (
     <main>
       <section className="hero">
-        <h1>Creator marketplace</h1>
+        <span className="pill unlocked">Wallet workspace</span>
+        <h1>Creator account</h1>
         <p>
-          Publish ENTRAIN tracks from Studio into the public catalogue. Free
-          tracks unlock instantly; paid tracks require a SOL payment to the
-          creator wallet before the pattern JSON is revealed.
+          Connect Phantom to manage your profile and wallet-saved tracks. Public
+          community publishing and paid sales are paused for now: share tracks
+          privately with exact # links, or save them to your own wallet library.
         </p>
         <div className="tagrow">
           <a className="btn primary" href="/studio">
             Open Studio
           </a>
+          <a className="btn" href="/library">
+            Private library
+          </a>
           <a className="btn" href="/soundtracks">
-            Browse catalogue
+            Prepared catalogue
           </a>
         </div>
       </section>

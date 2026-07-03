@@ -1,21 +1,21 @@
 import { featuredSoundtracks } from "@/lib/soundtracks";
-import { TOKEN_DISPLAY_NAME } from "@/lib/config";
 
 export default function HomePage() {
   const featured = featuredSoundtracks(3);
   return (
     <main>
       <section className="hero">
-        <span className="pill">
-          ENTRAIN format · browser player · wallet library · token-gated catalog
-          · creator marketplace
+        <span className="pill unlocked">
+          ENTRAIN format · browser player · public catalogue · local-first
+          studio · optional wallet library
         </span>
-        <h1>Create your own tracks, or unlock ready brainwave soundtracks.</h1>
+        <h1>Create your own tracks, or play ready brainwave soundtracks.</h1>
         <p>
-          Every track is stored as ENTRAIN JSON: layers, beat timelines,
-          ambience-loop metadata, pan motion, name, and description. The browser
-          player can run that format live, render WAVs locally, and clone any
-          unlocked soundtrack into your own editor.
+          Every track is stored as ENTRAIN JSON: layers, beat timelines, carrier
+          glides, ambience-loop metadata, pan motion, name, and description. The
+          browser player runs that format live, renders WAVs locally, and clones
+          any soundtrack into the editor without wallet login. Phantom is
+          optional only for saving private tracks to your wallet library.
         </p>
         <p>
           <a className="btn primary" href="/studio">
@@ -23,39 +23,35 @@ export default function HomePage() {
           </a>{" "}
           <a className="btn" href="/soundtracks">
             Browse soundtracks
-          </a>{" "}
-          <a className="btn" href="/library">
-            Private library
-          </a>{" "}
-          <a className="btn" href="/creator">
-            Creator dashboard
           </a>
         </p>
-        <div id="token-market-root" />
       </section>
 
       <section className="two">
         <article className="card">
-          <h3>Free editor</h3>
+          <h3>No-login Studio</h3>
           <p className="muted">
-            Build a track from scratch, play it, import/export JSON, share it by
-            URL hash, and render a WAV without a login. Saving to your private
-            cloud-backed library requires Phantom authorization. You can also
-            publish a finished track into the public catalogue and set a creator
-            price.
+            Build a track from scratch, play it, import/export JSON, share it
+            privately by URL hash, and render a WAV locally. Creation and exact
+            # sharing need no login. Connect Phantom only when you want to save
+            a private cloud copy to your wallet library.
           </p>
           <p>
             <a className="btn primary" href="/studio?new=1">
               Open editor
+            </a>{" "}
+            <a className="btn" href="/library">
+              Private library
             </a>
           </p>
         </article>
         <article className="card">
           <h3>Prepared soundtracks</h3>
           <p className="muted">
-            Published rows in the database appear as ready soundtracks. Free
-            rows open immediately; holder/pro/collector rows require the
-            configured {TOKEN_DISPLAY_NAME} balance in the connected wallet.
+            Published rows in the database appear as ready soundtracks. The
+            public catalogue is reserved for prepared/admin-curated soundtracks.
+            Community publishing is paused; creators share by # link or save
+            privately.
           </p>
           <p>
             <a className="btn" href="/soundtracks">
@@ -63,25 +59,6 @@ export default function HomePage() {
             </a>
           </p>
         </article>
-      </section>
-
-      <section className="card" style={{ marginTop: "26px" }}>
-        <h3>Creator marketplace</h3>
-        <p className="muted">
-          Creators can publish original ENTRAIN-format soundtracks from Studio.
-          Paid creator tracks are hidden until the listener buys access with
-          Phantom; the SOL payment goes directly to the creator payout wallet,
-          then the server verifies the transaction before revealing the playable
-          pattern JSON.
-        </p>
-        <p>
-          <a className="btn" href="/creator">
-            Creator dashboard
-          </a>{" "}
-          <a className="btn" href="/studio">
-            Publish from Studio
-          </a>
-        </p>
       </section>
 
       <section style={{ marginTop: "26px" }}>
@@ -95,15 +72,10 @@ export default function HomePage() {
         </div>
         <div className="grid">
           {featured.map((t) => (
-            <article className="card template-card" key={t.slug}>
+            <article className="card template-card unlocked-card" key={t.slug}>
               <div className="tagrow">
                 <span className="pill">{t.category}</span>
-                <span className={`pill tier-${t.tier}`}>{t.tier}</span>
-                <span className="pill">
-                  {t.minTokens
-                    ? `${t.minTokens} ${TOKEN_DISPLAY_NAME}`
-                    : "free"}
-                </span>
+                <span className="pill unlocked">free</span>
               </div>
               <h3>{t.title}</h3>
               <p className="muted">{t.summary}</p>

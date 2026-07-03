@@ -1,7 +1,7 @@
 import type { EntrainTemplateV1 } from "@/format/entrain-format";
 import { getAuthSession } from "./auth";
 import { cookieValue, json } from "./http";
-import { tokenAmountLabel } from "./config";
+import { PUBLIC_FREE_MODE, tokenAmountLabel } from "./config";
 import { formatSol, hasPurchase } from "./marketplace";
 
 export type WalletAuth = ReturnType<typeof getAuthSession>;
@@ -50,9 +50,11 @@ export function decideSoundtrackAccess(
       staleBalance: false,
       balanceRefreshedAt: auth?.lastRefreshedAt,
     };
-  const minTokens = Number(template.minTokens || 0);
+  const minTokens = PUBLIC_FREE_MODE ? 0 : Number(template.minTokens || 0);
   const balance = Number(auth?.balance || 0);
-  const priceLamports = Number(template.market?.priceLamports || 0);
+  const priceLamports = PUBLIC_FREE_MODE
+    ? 0
+    : Number(template.market?.priceLamports || 0);
   const payoutWallet = template.market?.payoutWallet || template.creatorWallet;
   const ownedByUser =
     !!auth?.publicKey &&
@@ -60,6 +62,23 @@ export function decideSoundtrackAccess(
     auth.publicKey === template.ownerPublicKey;
   const purchased =
     !!auth?.publicKey && hasPurchase(auth.publicKey, template.slug);
+
+  if (PUBLIC_FREE_MODE)
+    return {
+      ok: true,
+      code: "ok",
+      message: "Public/free mode: unlocked without wallet.",
+      minTokens,
+      balance,
+      requiresWallet: false,
+      staleBalance: false,
+      balanceRefreshedAt: auth?.lastRefreshedAt,
+      priceLamports,
+      priceCurrency: "SOL",
+      payoutWallet,
+      ownedByUser: true,
+      purchased: true,
+    };
 
   if (ownedByUser)
     return {
@@ -197,7 +216,7 @@ export function decideLibraryAccess(
   return {
     ok: true,
     code: "ok",
-    message: "Wallet library unlocked",
+    message: "Wallet private library unlocked",
     balance: auth.balance,
     balanceRefreshedAt: auth.lastRefreshedAt,
   };

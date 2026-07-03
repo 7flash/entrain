@@ -26,7 +26,14 @@ export function GET(req: Request) {
     .orderBy("createdAt", "DESC")
     .limit(100)
     .all();
-  return json({ ok: true, profile, soundtracks });
+  return json({
+    ok: true,
+    profile,
+    soundtracks,
+    publishingEnabled: false,
+    message:
+      "Public publishing is disabled for now. Use private # share links or save to your wallet library.",
+  });
 }
 
 export async function POST(req: Request) {

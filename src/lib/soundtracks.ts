@@ -15,6 +15,7 @@ import {
   featuredTemplates,
   tierForMinTokens,
 } from "./templates";
+import { PUBLIC_FREE_MODE } from "./config";
 
 export type SoundtrackRow = EntrainTemplateV1 & {
   summaryStats: SessionSummary;
@@ -23,14 +24,31 @@ export type SoundtrackRow = EntrainTemplateV1 & {
 };
 
 export function toSoundtrack(template: EntrainTemplateV1): SoundtrackRow {
+  const publicTemplate = PUBLIC_FREE_MODE
+    ? publicFreeTemplate(template)
+    : template;
+  return {
+    ...publicTemplate,
+    summaryStats: summarizeSession(publicTemplate.session),
+    analysis: analyzeSession(publicTemplate.session),
+    referenceMatch: compareToReference(
+      publicTemplate.session,
+      publicTemplate.lineage?.referenceId,
+    ),
+  };
+}
+
+export function publicFreeTemplate(
+  template: EntrainTemplateV1,
+): EntrainTemplateV1 {
+  if (!PUBLIC_FREE_MODE) return template;
   return {
     ...template,
-    summaryStats: summarizeSession(template.session),
-    analysis: analyzeSession(template.session),
-    referenceMatch: compareToReference(
-      template.session,
-      template.lineage?.referenceId,
-    ),
+    tier: "free",
+    minTokens: 0,
+    unlockNote:
+      "Public/free mode is enabled: this soundtrack can be played, exported, cloned, and inspected without wallet authorization.",
+    market: { ...(template.market || {}), kind: "free", priceLamports: 0 },
   };
 }
 

@@ -1,6 +1,7 @@
 import { authFromRequest, decideSoundtrackAccess } from "@/lib/access-policy";
 import { findSoundtrack } from "@/lib/soundtracks";
 import { json, readJson } from "@/lib/http";
+import { PUBLIC_FREE_MODE } from "@/lib/config";
 import {
   confirmPurchase,
   createPurchaseIntent,
@@ -11,6 +12,15 @@ import { clientKey, rateLimit } from "@/lib/rate-limit";
 type Body = { slug?: string; txSignature?: string; intentId?: string };
 
 export function GET(req: Request) {
+  if (PUBLIC_FREE_MODE)
+    return json(
+      {
+        ok: false,
+        error:
+          "Purchases are disabled in public/free mode; all soundtracks are free.",
+      },
+      { status: 403 },
+    );
   const url = new URL(req.url);
   const slug = url.searchParams.get("slug") || "";
   const auth = authFromRequest(req);
@@ -52,6 +62,15 @@ export function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  if (PUBLIC_FREE_MODE)
+    return json(
+      {
+        ok: false,
+        error:
+          "Purchases are disabled in public/free mode; all soundtracks are free.",
+      },
+      { status: 403 },
+    );
   const rl = rateLimit(clientKey(req, "confirm-purchase"), 30, 60_000);
   if (!rl.ok)
     return json(

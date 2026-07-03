@@ -7,10 +7,20 @@ import {
 import { db } from "@/lib/db";
 import { json } from "@/lib/http";
 import { publicSessionCopy } from "@/format/entrain-format";
+import { PUBLIC_FREE_MODE } from "@/lib/config";
 
 type Props = { params: { slug: string } };
 
 export async function POST(req: Request, { params }: Props) {
+  if (PUBLIC_FREE_MODE)
+    return json(
+      {
+        ok: false,
+        error:
+          "Private cloud library is disabled in public/free mode. Use Clone to editor or a private # share URL.",
+      },
+      { status: 403 },
+    );
   const auth = authFromRequest(req);
   const lib = decideLibraryAccess(auth, "save");
   if (!lib.ok || !auth)

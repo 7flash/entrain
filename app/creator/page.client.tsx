@@ -3,7 +3,7 @@ import { connectAndVerify } from "@/client/wallet";
 
 let data: any = null;
 let msg =
-  "Connect Phantom to manage your creator profile and published tracks.";
+  "Connect Phantom to manage your creator profile. Publishing is paused; use private links or wallet library saves.";
 let busy = false;
 
 function App() {
@@ -11,7 +11,7 @@ function App() {
     <div>
       <div className="toolbar">
         <div>
-          <strong>Creator dashboard</strong>
+          <strong>Creator account</strong>
           <div className="small">{msg}</div>
         </div>
         <div className="tagrow">
@@ -19,19 +19,31 @@ function App() {
             {data ? "Refresh" : "Connect Phantom"}
           </button>
           <a className="btn" href="/studio">
-            Publish from Studio
+            Create in Studio
+          </a>
+          <a className="btn" href="/library">
+            Private library
           </a>
         </div>
+      </div>
+      <div className="notice">
+        <strong>Public publishing is paused.</strong>
+        <br />
+        <span className="small">
+          Tracks can still be created without login, shared anonymously by #
+          URL, or saved to your private wallet library after Phantom login. The
+          public catalogue is reserved for prepared soundtracks
+          curated/admin-published by the project.
+        </span>
       </div>
       {data ? <Profile /> : null}
       {data?.soundtracks?.length ? (
         <table className="matrix">
           <thead>
             <tr>
-              <th>Track</th>
+              <th>Catalogue row</th>
               <th>Status</th>
-              <th>Gate</th>
-              <th>Sales</th>
+              <th>Visibility</th>
               <th></th>
             </tr>
           </thead>
@@ -44,14 +56,7 @@ function App() {
                   <span className="small">/{s.slug}</span>
                 </td>
                 <td>{s.status}</td>
-                <td>
-                  {Number(s.priceLamports || 0) > 0
-                    ? `${(Number(s.priceLamports) / 1e9).toFixed(4)} SOL`
-                    : Number(s.minTokens || 0) > 0
-                      ? `${s.minTokens} token gate`
-                      : "free"}
-                </td>
-                <td>{s.purchaseCount || 0}</td>
+                <td>{s.isPublished ? "public/admin row" : "draft"}</td>
                 <td>
                   <a className="btn" href={`/soundtracks/${s.slug}`}>
                     Open
@@ -63,8 +68,8 @@ function App() {
         </table>
       ) : data ? (
         <p className="muted">
-          No published community tracks yet. Create one in Studio and click
-          Publish / sell.
+          No public creator rows. Use Studio → Save to wallet library for
+          private cloud saves, or copy an exact private URL to share directly.
         </p>
       ) : null}
     </div>
@@ -80,7 +85,11 @@ function Profile() {
       </div>
       <div className="field">
         <label>Payout wallet</label>
-        <input id="creator-wallet" defaultValue={p.payoutWallet || ""} />
+        <input
+          id="creator-wallet"
+          defaultValue={p.payoutWallet || ""}
+          placeholder="Optional while publishing is paused"
+        />
       </div>
       <div className="field" style={{ gridColumn: "1/-1" }}>
         <label>Bio</label>
@@ -102,7 +111,9 @@ async function load() {
     await connectAndVerify();
     data = await fetch("/api/creator/profile").then((r) => r.json());
     if (!data.ok) throw new Error(data.error || "load failed");
-    msg = `Connected. ${data.soundtracks?.length || 0} creator track(s).`;
+    msg =
+      data.message ||
+      `Connected. ${data.soundtracks?.length || 0} public row(s).`;
   } catch (e: any) {
     msg = e.message || "connect failed";
   }

@@ -59,7 +59,8 @@ function lineage(
   };
 }
 
-export const BUILTIN_SOUNDTRACK_REVISION = "builtin-v24-iso-trap";
+export const BUILTIN_SOUNDTRACK_REVISION =
+  "builtin-v31-public-library-focus-stages";
 
 export const seedTemplates: EntrainTemplateV1[] = [
   t({
@@ -525,6 +526,258 @@ export const seedTemplates: EntrainTemplateV1[] = [
       undefined,
       "hold-last",
     ),
+  }),
+  t({
+    slug: "focus-15-no-time",
+    title: "Focus 15 · No-Time Drift",
+    category: "gateway",
+    tier: "free",
+    minTokens: 0,
+    summary:
+      "An inspired no-time style drift: deep delta base, theta bridge, and slow bowl/rain ambience.",
+    description:
+      "An ENTRAIN-original Focus-15-inspired soundtrack, not an official tape clone. It extends the gateway stack into a quieter no-time style arc: stable low delta, soft theta, and a portable heavy-rain-bowls bed with slow spatial drift. Use as a prepared meditative soundtrack and as a reference for long quiet interpolation.",
+    tags: ["gateway", "focus-15", "delta", "theta", "ambience", "prepared"],
+    lineage: lineage(
+      "",
+      "inspired",
+      "Inspired by the Focus-level trajectory notes. No exact public carrier map is claimed.",
+      [
+        "No voice guidance or official tape material.",
+        "Carrier/beat choices are ENTRAIN-designed for comfortable browser playback.",
+      ],
+    ),
+    session: s("Focus 15 · No-Time Drift", 45, [
+      {
+        id: "delta-floor",
+        type: "binaural",
+        carrierHz: 100,
+        wave: "sine",
+        keyframes: [
+          { tMin: 0, beatHz: 2.5, gainPct: 0 },
+          { tMin: 4, beatHz: 1.5, gainPct: 16 },
+          { tMin: 45, beatHz: 1.5, gainPct: 16 },
+        ],
+      },
+      {
+        id: "theta-thread",
+        type: "binaural",
+        carrierHz: 200,
+        wave: "sine",
+        keyframes: [
+          { tMin: 0, beatHz: 6, gainPct: 10 },
+          { tMin: 12, beatHz: 4, gainPct: 14 },
+          { tMin: 45, beatHz: 4, gainPct: 12 },
+        ],
+      },
+      {
+        id: "soft-alpha-gate",
+        type: "binaural",
+        carrierHz: 250,
+        wave: "sine",
+        keyframes: [
+          { tMin: 0, beatHz: 10, gainPct: 10 },
+          { tMin: 10, beatHz: 8, gainPct: 6 },
+          { tMin: 20, beatHz: 8, gainPct: 0 },
+          { tMin: 45, beatHz: 8, gainPct: 0 },
+        ],
+      },
+      {
+        id: "no-time-bed",
+        type: "procedural-ambience",
+        ambienceRecipe: "heavy-rain-bowls",
+        seed: 1515,
+        pan: 0,
+        panMotion: { rateHz: 0.018, depth: 0.18 },
+        keyframes: [
+          { tMin: 0, gainPct: 0 },
+          { tMin: 3, gainPct: 42 },
+          { tMin: 45, gainPct: 42 },
+        ],
+      },
+    ]),
+  }),
+  t({
+    slug: "focus-21-bridge",
+    title: "Focus 21 · Bridge Field",
+    category: "gateway",
+    tier: "free",
+    minTokens: 0,
+    summary:
+      "A spacious bridge-state style stack with low delta, theta, and a gentle 7.8 Hz layer.",
+    description:
+      "An ENTRAIN-original Focus-21-inspired soundtrack. It is designed as a sparse bridge field rather than an exact replication: low delta floor, theta continuity, a faint 7.8 Hz spatial layer, and slow procedural ambience. It remains experimental and descriptive.",
+    tags: ["gateway", "focus-21", "bridge", "theta", "delta", "prepared"],
+    lineage: lineage(
+      "",
+      "inspired",
+      "Inspired by Focus-level descriptions only; no exact official carrier map is claimed.",
+      [
+        "No voice guidance or original supporting material.",
+        "Uses a portable procedural ambience bed.",
+      ],
+    ),
+    session: s("Focus 21 · Bridge Field", 45, [
+      {
+        id: "delta-floor",
+        type: "binaural",
+        carrierHz: 100,
+        wave: "sine",
+        keyframes: [
+          { tMin: 0, beatHz: 1.5, gainPct: 14 },
+          { tMin: 45, beatHz: 1.5, gainPct: 14 },
+        ],
+      },
+      {
+        id: "theta-bridge",
+        type: "binaural",
+        carrierHz: 200,
+        wave: "sine",
+        keyframes: [
+          { tMin: 0, beatHz: 4, gainPct: 12 },
+          { tMin: 45, beatHz: 4.2, gainPct: 12 },
+        ],
+      },
+      {
+        id: "spatial-78",
+        type: "binaural",
+        carrierHz: 320,
+        wave: "sine",
+        keyframes: [
+          { tMin: 0, beatHz: 7.8, gainPct: 0 },
+          { tMin: 6, beatHz: 7.8, gainPct: 8 },
+          { tMin: 45, beatHz: 7.8, gainPct: 8 },
+        ],
+      },
+      {
+        id: "bridge-bowl",
+        type: "additive",
+        carrierHz: 136.1,
+        partials: [
+          { ratio: 1, gain: 1, decaySec: 1 },
+          { ratio: 1.5, gain: 0.45, decaySec: 0.75 },
+          { ratio: 2.01, gain: 0.28, decaySec: 0.55 },
+          { ratio: 2.77, gain: 0.18, decaySec: 0.35 },
+        ],
+        pan: 0,
+        panMotion: { rateHz: 0.012, depth: 0.16 },
+        keyframes: [
+          { tMin: 0, gainPct: 0 },
+          { tMin: 5, gainPct: 18 },
+          { tMin: 45, gainPct: 18 },
+        ],
+      },
+      {
+        id: "pink-bed",
+        type: "noise",
+        noiseColor: "pink",
+        keyframes: [
+          { tMin: 0, gainPct: 28 },
+          { tMin: 45, gainPct: 28 },
+        ],
+      },
+    ]),
+  }),
+  t({
+    slug: "focus-22-transition-zone",
+    title: "Focus 22 · Transition Zone",
+    category: "gateway",
+    tier: "free",
+    minTokens: 0,
+    summary:
+      "A slow transition-zone style soundscape: low delta, high theta, brown-room ambience.",
+    description:
+      "An ENTRAIN-original Focus-22-inspired soundscape. It is not a claim of exact historical replication; it uses a very slow delta anchor, high-theta support, and a brown-room procedural ambience to create a quiet, liminal prepared track.",
+    tags: ["gateway", "focus-22", "liminal", "delta", "theta", "prepared"],
+    lineage: lineage(
+      "",
+      "inspired",
+      "Inspired by Focus-level descriptions only; no exact official carrier map is claimed.",
+      [
+        "No original guidance audio.",
+        "Amplitude balance normalized for safe playback.",
+      ],
+    ),
+    session: s("Focus 22 · Transition Zone", 35, [
+      {
+        id: "slow-delta",
+        type: "binaural",
+        carrierHz: 90,
+        wave: "sine",
+        keyframes: [
+          { tMin: 0, beatHz: 1.2, gainPct: 14 },
+          { tMin: 35, beatHz: 1.2, gainPct: 14 },
+        ],
+      },
+      {
+        id: "high-theta",
+        type: "binaural",
+        carrierHz: 210,
+        wave: "sine",
+        keyframes: [
+          { tMin: 0, beatHz: 4.8, gainPct: 12 },
+          { tMin: 35, beatHz: 4.8, gainPct: 12 },
+        ],
+      },
+      {
+        id: "brown-room",
+        type: "procedural-ambience",
+        ambienceRecipe: "brown-room",
+        seed: 2222,
+        pan: 0,
+        panMotion: { rateHz: 0.01, depth: 0.1 },
+        keyframes: [
+          { tMin: 0, gainPct: 0 },
+          { tMin: 2, gainPct: 36 },
+          { tMin: 35, gainPct: 36 },
+        ],
+      },
+    ]),
+  }),
+  t({
+    slug: "awakening-descent-110",
+    title: "Deep Descent 60 · 110 Carrier",
+    category: "premium",
+    tier: "free",
+    minTokens: 0,
+    summary: "A lower-carrier variant of the 60-minute 10→2.5→1.5 Hz descent.",
+    description:
+      "A Holosync-style lower-carrier descent variant: 110 Hz carrier with the same auditable 10→2.5→1.5 Hz beat glide across 60 minutes. This is an ENTRAIN-designed variant for users who want to compare carrier comfort and speaker/headphone behavior.",
+    tags: ["binaural", "longform", "delta", "descent", "prepared"],
+    lineage: lineage(
+      "",
+      "inspired",
+      "Inspired by long-form descent practice, not an exact commercial-stage clone.",
+      [
+        "Uses 110 Hz carrier for comparison against the 140 Hz row.",
+        "Uses portable heavy-rain-bowls ambience.",
+      ],
+    ),
+    session: s("Deep Descent 60 · 110 Carrier", 60, [
+      {
+        id: "descent-110",
+        type: "binaural",
+        carrierHz: 110,
+        wave: "sine",
+        keyframes: [
+          ...createLinearGlideKeyframes(10, 2.5, 30, 20),
+          { tMin: 60, beatHz: 1.5, gainPct: 18 },
+        ],
+      },
+      {
+        id: "heavy-rain-bowls",
+        type: "procedural-ambience",
+        ambienceRecipe: "heavy-rain-bowls",
+        seed: 6110,
+        pan: 0,
+        panMotion: { rateHz: 0.025, depth: 0.16 },
+        keyframes: [
+          { tMin: 0, gainPct: 0 },
+          { tMin: 2, gainPct: 48 },
+          { tMin: 60, gainPct: 48 },
+        ],
+      },
+    ]),
   }),
   t({
     slug: "collector-40hz-suite",

@@ -1,8 +1,6 @@
-import { TOKEN_DISPLAY_NAME } from "@/lib/config";
 import { findSoundtrack } from "@/lib/soundtracks";
 import { analyzeSession, analysisBadge } from "@/format/protocol-analyzer";
 import { signalMapForSession, formatSignalPoint } from "@/format/channel-map";
-import { formatSol } from "@/lib/marketplace";
 
 const layerName = (l: any) => {
   if (l.type === "sample")
@@ -34,17 +32,11 @@ export default function SoundtrackDetailPage({ params }: Props) {
       </main>
     );
   }
-  const priceLamports = Number(template.market?.priceLamports || 0);
-  const req =
-    priceLamports > 0
-      ? `${formatSol(priceLamports)} creator access`
-      : template.minTokens
-        ? `${template.minTokens} ${TOKEN_DISPLAY_NAME} required`
-        : "Free soundtrack";
+  const req = "Free soundtrack";
   const analysis = analyzeSession(template.session);
   const lineage = template.lineage;
   const ref = template.referenceMatch;
-  const unlockedPublic = template.minTokens <= 0 && priceLamports <= 0;
+  const unlockedPublic = true;
   const signalMap = unlockedPublic
     ? signalMapForSession(template.session)
     : null;
@@ -81,17 +73,10 @@ export default function SoundtrackDetailPage({ params }: Props) {
           {template.unlockNote ? (
             <p className="notice">{template.unlockNote}</p>
           ) : null}
-          {priceLamports > 0 ? (
-            <p className="notice">
-              <strong>Creator marketplace:</strong> Buy lifetime access for{" "}
-              {formatSol(priceLamports)}. Payment goes directly to the creator
-              payout wallet.
-            </p>
-          ) : null}
           <p className="notice good">
-            This page can play the database format directly. Unlocking returns
-            only the ENTRAIN JSON; audio generation and WAV rendering stay local
-            in your browser.
+            Public/free mode is enabled. This page plays the database format
+            directly; audio generation and WAV rendering stay local in your
+            browser.
           </p>
           <div className="notice">
             <strong>Protocol analyzer: {analysisBadge(analysis)}</strong>
@@ -162,13 +147,13 @@ export default function SoundtrackDetailPage({ params }: Props) {
           <div
             id="soundtrack-player-root"
             data-slug={template.slug}
-            data-min-tokens={String(template.minTokens)}
+            data-min-tokens="0"
           >
             <p className="muted">Loading player…</p>
           </div>
         </article>
         <article className="card">
-          <h3>{unlockedPublic ? "Signal map" : "Locked signal map"}</h3>
+          <h3>Signal map</h3>
           <p className="small">
             Pattern length: {template.session.durationMin} minutes ·{" "}
             {template.session.layers.length} layers · fade{" "}
@@ -186,13 +171,6 @@ export default function SoundtrackDetailPage({ params }: Props) {
               ? " · crossfade loops"
               : ""}
           </p>
-          {!unlockedPublic ? (
-            <p className="notice">
-              Exact layer/keyframe data is part of the gated soundtrack pattern.
-              Unlock the player to view the full left/right frequency map and
-              render it locally.
-            </p>
-          ) : null}
           {signalMap ? (
             <table className="matrix">
               <thead>

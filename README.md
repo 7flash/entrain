@@ -1,3 +1,88 @@
+# ENTRAIN TradJS Server v0.31
+
+Public catalogue + optional wallet library pass. This corrects v0.30: catalogue access remains public/free, but Phantom login and private wallet saves are back. Creator/public marketplace publishing stays paused.
+
+- All prepared catalogue soundtracks remain free/public and expose playable ENTRAIN JSON without wallet gates.
+- Phantom login is available again for private cloud saves. Studio creation, playback, exact # share URLs, JSON import/export, and WAV rendering still work without login.
+- `/library` is restored and lists wallet-saved private sessions.
+- `/creator` is restored as an account/profile workspace, but public publishing and paid sales remain disabled.
+- Studio now includes **Save to wallet library** while keeping anonymous # sharing as the main sharing path.
+- Creator/public submissions do not enter the public catalogue; use private share links or admin draft handoff.
+- Added more prepared gateway soundtracks: Focus 15 · No-Time Drift, Focus 21 · Bridge Field, Focus 22 · Transition Zone, and a 110 Hz Deep Descent variant. These are ENTRAIN-original/inspired rows, not official tape clones.
+- Navigation now includes Soundtracks, Create, Library, and Account.
+
+Local run:
+
+```bash
+bun install
+cp .env.example .env
+bun run sync:soundtracks
+bun run dev
+```
+
+# ENTRAIN TradJS Server v0.30
+
+
+
+Public/free mode pass. Wallet login, paid creator access, token gating, and private cloud library UI are disabled for now so the app can focus on the Studio and public soundtrack player.
+
+- All prepared soundtracks normalize to `free` at the soundtracks layer. Former holder/pro/collector rows are playable, exportable, inspectable, and cloneable without Phantom.
+- `/api/access` returns playable ENTRAIN JSON without wallet checks in public/free mode.
+- Soundtrack detail pages now show the full signal map publicly and remove locked-player / buy / wallet copy.
+- Soundtrack catalogue no longer renders wallet access controls or gate badges.
+- Homepage/nav now focus on Create + Soundtracks only.
+- Studio hides wallet/cloud actions and keeps local autosave, JSON export, WAV render, private # share URLs, capsule codes, and admin draft handoff.
+- Creator marketplace, purchases, and cloud private library routes return explicit disabled messages while this mode is active.
+- `PUBLIC_FREE_MODE` defaults to enabled. Set `PUBLIC_FREE_MODE=0` later to re-enable wallet/payment flows.
+
+Local run:
+
+```bash
+bun install
+cp .env.example .env
+bun run sync:soundtracks
+bun run dev
+```
+
+# ENTRAIN TradJS Server v0.29
+
+Soundtrack player UX and route-state hardening pass.
+
+- Fixed a client-state leak when navigating between soundtrack pages: previously the unlocked title/session from one page could survive into another locked page until reload. Mount now resets player/session/room/export state per slug.
+- Locked soundtrack pages now show a clear locked-player explanation instead of a blank oscilloscope, group-room controls, and export controls.
+- Group listening and WAV export controls only render after the playable ENTRAIN JSON is actually unlocked.
+- Soundtrack player action bars are cleaner on mobile: full-width actions, better spacing, and less visual clutter before unlock.
+- The page now makes the data boundary explicit: locked pages hide layer/keyframe/signal maps; unlocked pages receive only JSON and synthesize locally.
+
+Local run:
+
+```bash
+bun install
+cp .env.example .env
+bun run sync:soundtracks
+bun run dev
+```
+
+# ENTRAIN TradJS Server v0.28
+
+Studio cleanup and wallet-error pass.
+
+- Karplus pluck rate now supports up to 20 Hz in the UI, format sanitizer, and audio engine.
+- Non-tone layers no longer show a misleading method selector. Karplus, additive, noise, sample, and procedural ambience show a fixed layer-type pill.
+- Tone layers keep a focused Tone method selector with only carrier, isochronic, monaural, and binaural choices.
+- Studio layout is mobile-first: single-column edit flow, horizontal band strip, full-width action buttons, and side controls below the signal stack until desktop width.
+- Soundtrack detail pages now stack cleanly on mobile and only split into columns on wide screens.
+- Wallet verification now returns explicit challenge/signature errors instead of the generic `measure.assert: Verify wallet failed`.
+
+Local run:
+
+```bash
+bun install
+cp .env.example .env
+bun run sync:soundtracks
+bun run dev
+```
+
 # ENTRAIN TradJS Server v0.25
 
 Studio UI/UX pass.
@@ -110,3 +195,12 @@ bun run dev
 ```
 
 Studio remains no-login-first: edit, play, render WAV, import/export, and share private hash URLs without connecting Phantom.
+
+
+## v0.27 Studio coaching pass
+
+- Added an always-visible operator coach that tells the user the next useful action based on the current session state.
+- Added persistent carrier calibration: mark a carrier frequency as steady for the current playback device and keep it in local storage.
+- Added a Pulse intention selector for countable pulses, fused focus buzz, and descent arcs.
+- Added interpolation preview for global timeline point tabs so operators can see previous / active / next carrier, beat, and gain values.
+- Kept Studio local-first: all new coaching/calibration tools work without wallet login.

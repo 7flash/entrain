@@ -2,8 +2,18 @@ import { authFromRequest } from "@/lib/access-policy";
 import { json, readJson } from "@/lib/http";
 import { publishCommunitySoundtrack } from "@/lib/marketplace";
 import { clientKey, rateLimit } from "@/lib/rate-limit";
+import { PUBLIC_FREE_MODE } from "@/lib/config";
 
 export async function POST(req: Request) {
+  if (PUBLIC_FREE_MODE)
+    return json(
+      {
+        ok: false,
+        error:
+          "Publishing and creator payments are disabled in public/free mode. Use Studio private # share URLs, JSON export, or admin publishing.",
+      },
+      { status: 403 },
+    );
   const rl = rateLimit(clientKey(req, "publish-soundtrack"), 12, 60_000);
   if (!rl.ok)
     return json(

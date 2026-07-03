@@ -275,8 +275,10 @@ function App() {
             <div className="eyebrow">No-login studio</div>
             <p className="small">
               Play, edit, render WAV, import/export, and share anonymously
-              without connecting a wallet. The URL payload lives after{" "}
-              <span className="mono">#</span>, so it is not sent to the server.
+              without connecting a wallet. Phantom is optional and only used to
+              save a private cloud copy to your wallet library. The URL payload
+              lives after <span className="mono">#</span>, so it is not sent to
+              the server.
             </p>
             <div className="studio-file-actions local-first-actions">
               <button className="act primary" onClick={copyShareUrl}>
@@ -284,6 +286,9 @@ function App() {
               </button>
               <button className="act" onClick={copyShareCapsule}>
                 Copy capsule
+              </button>
+              <button className="act" onClick={saveServer}>
+                Save to wallet library
               </button>
               <button className="act" onClick={importShareString}>
                 Import URL/code
@@ -352,24 +357,22 @@ function App() {
               </p>
             )}
           </div>
-          <details className="studio-account-box">
-            <summary>Wallet/cloud actions</summary>
+          <div className="studio-share-box">
+            <div className="eyebrow">Publishing mode</div>
+            <p className="small">
+              Public community publishing and paid sales are paused. Save
+              privately with Phantom, share by exact # URL, or send an admin
+              draft for curated catalogue publishing.
+            </p>
             <div className="studio-file-actions">
               <button className="act" onClick={saveServer}>
-                Save to private cloud library
-              </button>
-              <button className="act" onClick={publishCurrent}>
-                Publish / sell
+                Save to wallet library
               </button>
               <button className="act" onClick={sendAdminDraft}>
                 Admin draft
               </button>
             </div>
-            <p className="small">
-              These actions connect Phantom only when clicked. The editor itself
-              remains local-first.
-            </p>
-          </details>
+          </div>
         </aside>
 
         <section className="studio-layers">
@@ -877,7 +880,7 @@ function coachPlan(analysis: ReturnType<typeof analyzeSession>) {
       title: "Start from one steady tone.",
       body: "Build the track like an operator: verify the playback device first, then add pulse modulation, then create a timeline arc.",
       micro:
-        "No wallet, no catalogue, no server required — Studio is local-first.",
+        "No wallet required for creation; Phantom is optional for private library saves.",
       actions: [
         {
           label: "Carrier check",
@@ -1035,7 +1038,7 @@ function StudioChecklist({
     {
       label: "Analyzer clean",
       done: ok,
-      hint: "Fix blocking warnings before publishing or sharing widely.",
+      hint: "Fix blocking warnings before saving or sharing widely.",
     },
   ];
   return (
