@@ -45,19 +45,15 @@ let activePointMin = 0;
 let verifiedCarrierHz: number | null = null;
 let coachOpen = true;
 
-const layerTypes: LayerType[] = [
-  "binaural",
-  "monaural",
+const toneMethods: LayerType[] = [
+  "carrier",
   "iso-smooth",
   "iso-trap",
   "iso-hard",
-  "carrier",
-  "noise",
-  "sample",
-  "procedural-ambience",
-  "additive",
-  "karplus",
+  "monaural",
+  "binaural",
 ];
+const isToneMethod = (type: LayerType) => toneMethods.includes(type);
 const isNoBeat = (l: EntrainLayerV1) => !hasBeat(l.type);
 const isNoCarrier = (l: EntrainLayerV1) => !hasCarrier(l.type);
 const uid = () =>
@@ -476,23 +472,30 @@ function LayerCard({
             />
           </div>
         ) : null}
-        <div className="field">
-          <label>Method</label>
-          <select
-            value={l.type}
-            onChange={(e: any) => {
-              changeType(l, e.currentTarget.value as LayerType);
-              ensureLayerPoint(l, activePointMin);
-              repaint(true);
-            }}
-          >
-            {layerTypes.map((x) => (
-              <option value={x} key={x}>
-                {layerTypeLabel(x)}
-              </option>
-            ))}
-          </select>
-        </div>
+        {isToneMethod(l.type) ? (
+          <div className="field">
+            <label>Tone method</label>
+            <select
+              value={l.type}
+              onChange={(e: any) => {
+                changeType(l, e.currentTarget.value as LayerType);
+                ensureLayerPoint(l, activePointMin);
+                repaint(true);
+              }}
+            >
+              {toneMethods.map((x) => (
+                <option value={x} key={x}>
+                  {layerTypeLabel(x)}
+                </option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="field layer-fixed-type">
+            <label>Layer type</label>
+            <div className="fixed-type-pill">{layerTypeLabel(l.type)}</div>
+          </div>
+        )}
         <div className="field">
           <label>
             Gain at point <b>{point.gainPct || 0}%</b>
@@ -1546,13 +1549,16 @@ function KarplusControls({ l }: { l: EntrainLayerV1 }) {
       </div>
       <div className="field">
         <label>
-          Pluck rate <b>{cfg.rateHz.toFixed(3)} Hz</b>
+          Pluck rate{" "}
+          <b>
+            {cfg.rateHz < 1 ? cfg.rateHz.toFixed(3) : cfg.rateHz.toFixed(2)} Hz
+          </b>
         </label>
         <input
           type="range"
           min="0.005"
-          max="2"
-          step="0.005"
+          max="20"
+          step="0.01"
           value={String(cfg.rateHz)}
           onInput={(e: any) => {
             l.karplus = { ...cfg, rateHz: Number(e.currentTarget.value) };

@@ -472,7 +472,7 @@ function sanitizeEnvelope(env: any): InstrumentEnvelope {
 
 function sanitizeKarplus(cfg: any): KarplusConfig {
   return {
-    rateHz: clampNum(cfg?.rateHz ?? 0.08, 0.005, 2),
+    rateHz: clampNum(cfg?.rateHz ?? 0.08, 0.005, 20),
     decay: clampNum(cfg?.decay ?? 0.996, 0.9, 0.9999),
     brightness: clampNum(cfg?.brightness ?? 0.5, 0, 1),
     durationSec: clampNum(cfg?.durationSec ?? 6, 1, 30),

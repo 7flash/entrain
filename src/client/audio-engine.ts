@@ -840,7 +840,7 @@ function buildKarplusLayer(
     durationSec: 6,
   };
   const freq = clamp(l.carrierHz || 220, 40, 1600);
-  const rate = clamp(cfg.rateHz || 0.08, 0.005, 2);
+  const rate = clamp(cfg.rateHz || 0.08, 0.005, 20);
   const interval = 1 / rate;
   const dur = clamp(cfg.durationSec || 6, 1, 30);
   let t = start - (Math.max(0, offsetSec) % interval);

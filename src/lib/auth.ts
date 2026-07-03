@@ -38,32 +38,60 @@ export async function verifyWallet(
   signature: string,
   nonce: string,
 ) {
-  return await authMeasure.measure.assert("Verify wallet", async () => {
-    const challenge = db.walletChallenges
-      .select()
-      .where({ publicKey, nonce, used: false })
-      .first() as any;
-    if (!challenge) throw new Error("Challenge not found");
-    if (challenge.expiresAt < Date.now()) throw new Error("Challenge expired");
+  // Do not wrap this in measure.assert: its generic failure message hides the
+  // actionable wallet error from the browser. Keep failures explicit.
+  const challenge = db.walletChallenges
+    .select()
+    .where({ publicKey, nonce, used: false })
+    .first() as any;
+  if (!challenge)
+    throw new Error(
+      "Wallet challenge not found. Start wallet verification again.",
+    );
+  if (challenge.expiresAt < Date.now())
+    throw new Error(
+      "Wallet challenge expired. Start wallet verification again.",
+    );
 
-    const msgBytes = new TextEncoder().encode(challenge.message);
-    const sigBytes = bs58.decode(signature);
-    const pubBytes = bs58.decode(publicKey);
-    const ok = await verifyAsync(sigBytes, msgBytes, pubBytes);
-    if (!ok) throw new Error("Invalid wallet signature");
+  let sigBytes: Uint8Array;
+  let pubBytes: Uint8Array;
+  try {
+    sigBytes = bs58.decode(signature);
+    pubBytes = bs58.decode(publicKey);
+  } catch {
+    throw new Error(
+      "Wallet signature encoding was invalid. Try connecting Phantom again.",
+    );
+  }
 
-    const consumeToken = crypto.randomUUID();
-    db.walletChallenges
-      .update({ used: true, consumeToken })
-      .where({ publicKey, nonce, used: false })
-      .run();
-    const consumed = db.walletChallenges
-      .select()
-      .where({ publicKey, nonce, used: true, consumeToken })
-      .first() as any;
-    if (!consumed) throw new Error("Challenge already used");
-    return await createWalletSession(publicKey);
-  });
+  const msgBytes = new TextEncoder().encode(challenge.message);
+  let ok = false;
+  try {
+    ok = await verifyAsync(sigBytes, msgBytes, pubBytes);
+  } catch {
+    throw new Error(
+      "Wallet signature verification failed. Try signing the message again.",
+    );
+  }
+  if (!ok)
+    throw new Error(
+      "Wallet signature did not match the challenge. Try connecting Phantom again.",
+    );
+
+  const consumeToken = crypto.randomUUID();
+  db.walletChallenges
+    .update({ used: true, consumeToken })
+    .where({ publicKey, nonce, used: false })
+    .run();
+  const consumed = db.walletChallenges
+    .select()
+    .where({ publicKey, nonce, used: true, consumeToken })
+    .first() as any;
+  if (!consumed)
+    throw new Error(
+      "Wallet challenge was already used. Start wallet verification again.",
+    );
+  return await createWalletSession(publicKey);
 }
 
 export async function createWalletSession(publicKey: string) {

@@ -74,7 +74,7 @@ export default function SoundtrackDetailPage({ params }: Props) {
         </div>
       </section>
 
-      <section className="two">
+      <section className="soundtrack-detail-stack">
         <article className="card">
           <h3>What this soundtrack is</h3>
           <p className="muted">{template.description}</p>

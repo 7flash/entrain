@@ -61,6 +61,26 @@ export function tokenLabel(amount: number | string) {
   return `${amount} ${tokenMetaCache.displayName}`;
 }
 
+function friendlyWalletError(message: string) {
+  const m = String(message || "wallet check failed");
+  if (m.includes("measure.assert") || m.includes("Verify wallet"))
+    return "Wallet verification failed. Please reconnect Phantom and sign the fresh message.";
+  if (/401|unauthorized/i.test(m))
+    return "Wallet access was denied or expired. Please reconnect Phantom.";
+  return m;
+}
+
+async function checkedJson(url: string, init?: RequestInit) {
+  const res = await fetch(url, init);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok && !body.error)
+    body.error =
+      res.status === 401
+        ? "Unauthorized wallet request"
+        : `Request failed (${res.status})`;
+  return body;
+}
+
 export async function getWalletState(): Promise<WalletState> {
   await getTokenMeta();
   const r = await fetch("/api/auth/session")
@@ -79,7 +99,7 @@ export async function refreshWalletBalance() {
   const r = await fetch("/api/auth/refresh", { method: "POST" }).then((x) =>
     x.json(),
   );
-  if (!r.ok) throw new Error(r.error || "refresh failed");
+  if (!r.ok) throw new Error(friendlyWalletError(r.error || "refresh failed"));
   return {
     authenticated: true,
     publicKey: r.publicKey || null,
@@ -97,21 +117,23 @@ export async function connectAndVerify() {
   }
   const conn = await provider.connect();
   const publicKey = conn.publicKey.toString();
-  const challenge = await fetch("/api/auth/challenge", {
+  const challenge = await checkedJson("/api/auth/challenge", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ publicKey }),
-  }).then((r) => r.json());
-  if (!challenge.ok) throw new Error(challenge.error || "challenge failed");
+  });
+  if (!challenge.ok)
+    throw new Error(friendlyWalletError(challenge.error || "challenge failed"));
   const encoded = new TextEncoder().encode(challenge.message);
   const signed = await provider.signMessage(encoded, "utf8");
   const signature = base58Encode(signed.signature);
-  const verified = await fetch("/api/auth/verify", {
+  const verified = await checkedJson("/api/auth/verify", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ publicKey, nonce: challenge.nonce, signature }),
-  }).then((r) => r.json());
-  if (!verified.ok) throw new Error(verified.error || "verify failed");
+  });
+  if (!verified.ok)
+    throw new Error(friendlyWalletError(verified.error || "verify failed"));
   return {
     authenticated: true,
     publicKey,
