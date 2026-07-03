@@ -10,6 +10,7 @@ import {
   protocolReferences,
 } from "@/format/protocol-reference";
 import { signalMapForSession, formatSignalPoint } from "@/format/channel-map";
+import { sbagenTextToSession, sessionToSbagenText } from "@/format/sbagen";
 
 let adminToken = localStorage.getItem("entrain:admin-token") || "";
 let rows: any[] = [];
@@ -346,6 +347,20 @@ function App() {
             />
           </Field>
           <div className="tagrow">
+            <label className="btn">
+              Import SBaGen script
+              <input
+                type="file"
+                accept=".txt,.sbagen,text/plain"
+                style={{ display: "none" }}
+                onChange={importSbagenToSelected}
+              />
+            </label>
+            <button className="btn" onClick={copySelectedSbagen}>
+              Copy SBaGen from row
+            </button>
+          </div>
+          <div className="tagrow">
             <button className="btn primary" disabled={busy} onClick={saveRow}>
               Save soundtrack row
             </button>
@@ -427,6 +442,34 @@ async function loadRows() {
     message = e.message || "load failed";
   }
   busy = false;
+  paint();
+}
+async function importSbagenToSelected(e: any) {
+  const f = e.currentTarget.files?.[0];
+  if (!f) return;
+  try {
+    const r = sbagenTextToSession(await f.text(), {
+      name: selected.title || selected.slug,
+    });
+    selected.sessionText = JSON.stringify(r.session, null, 2);
+    message = `imported SBaGen script${r.warnings.length ? ` · ${r.warnings.length} note(s)` : ""}`;
+  } catch (err: any) {
+    message = err.message || "SBaGen import failed";
+  }
+  e.currentTarget.value = "";
+  paint();
+}
+async function copySelectedSbagen() {
+  const parsed = parseSelectedSession();
+  if (!parsed) {
+    message = "Cannot parse session JSON.";
+    paint();
+    return;
+  }
+  await navigator.clipboard
+    .writeText(sessionToSbagenText(parsed))
+    .catch(() => {});
+  message = "SBaGen-compatible script copied";
   paint();
 }
 function loadFromEditor() {

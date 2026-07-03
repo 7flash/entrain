@@ -3,6 +3,11 @@ import {
   type EntrainSessionV1,
   type EntrainLayerV1,
 } from "./entrain-format";
+import {
+  looksLikeSbagen,
+  sbagenTextToSession,
+  sessionToSbagenText,
+} from "./sbagen";
 
 const isBed = (l: EntrainLayerV1) =>
   l.type === "noise" ||
@@ -53,6 +58,7 @@ export function sessionToPatternText(input: any) {
 }
 
 export function patternTextToSession(text: string): EntrainSessionV1 {
+  if (looksLikeSbagen(text)) return sbagenTextToSession(text).session;
   const lines = String(text || "")
     .split(/\r?\n/)
     .map((x) => x.trim())
@@ -185,3 +191,5 @@ function uid() {
     globalThis.crypto?.randomUUID?.() || Math.random().toString(36).slice(2, 10)
   );
 }
+
+export { looksLikeSbagen, sbagenTextToSession, sessionToSbagenText };

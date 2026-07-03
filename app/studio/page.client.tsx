@@ -9,6 +9,9 @@ import { analyzeSession } from "@/format/protocol-analyzer";
 import {
   sessionToPatternText,
   patternTextToSession,
+  sessionToSbagenText,
+  sbagenTextToSession,
+  looksLikeSbagen,
 } from "@/format/pattern-text";
 import { createAudioEngine } from "@/client/audio-engine";
 import { decodeSessionHash, encodeSessionHash } from "@/client/session-codec";
@@ -87,6 +90,9 @@ function App() {
           <button className="btn" onClick={copyPatternText}>
             Copy pattern text
           </button>
+          <button className="btn" onClick={copySbagenText}>
+            Copy SBaGen
+          </button>
           <label className="btn">
             Import JSON
             <input
@@ -97,7 +103,7 @@ function App() {
             />
           </label>
           <label className="btn">
-            Import pattern text
+            Import pattern/SBaGen
             <input
               type="file"
               accept=".txt,.sbagen,text/plain"
@@ -821,6 +827,13 @@ async function copyPatternText() {
   notice = "compact pattern text copied";
   repaint();
 }
+async function copySbagenText() {
+  await navigator.clipboard
+    .writeText(sessionToSbagenText(session))
+    .catch(() => {});
+  notice = "SBaGen-compatible script copied";
+  repaint();
+}
 async function exportWav() {
   exportBusy = true;
   notice = "rendering WAV locally…";
@@ -851,10 +864,17 @@ async function importJson(e: any) {
 async function importPatternText(e: any) {
   const f = e.currentTarget.files?.[0];
   if (!f) return;
-  session = patternTextToSession(await f.text());
+  const text = await f.text();
+  if (looksLikeSbagen(text)) {
+    const r = sbagenTextToSession(text);
+    session = r.session;
+    notice = `imported SBaGen script${r.warnings.length ? ` · ${r.warnings.length} note(s)` : ""}`;
+  } else {
+    session = patternTextToSession(text);
+    notice = "imported compact pattern text";
+  }
   engine.stop();
   engine = createAudioEngine(() => session);
-  notice = "imported compact pattern text";
   repaint();
 }
 async function copyShareUrl() {
