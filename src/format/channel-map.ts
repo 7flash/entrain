@@ -78,13 +78,20 @@ export function signalMapForLayer(layer: EntrainLayerV1): LayerSignalMap {
       points: keyframes.map((k) => binauralPoint(k, carrier)),
     };
   }
-  if (layer.type === "iso-smooth" || layer.type === "iso-hard") {
+  if (
+    layer.type === "iso-smooth" ||
+    layer.type === "iso-trap" ||
+    layer.type === "iso-hard"
+  ) {
     const carrier = Number(layer.carrierHz || 220);
     return {
       id: layer.id,
       type: layer.type,
-      label: `${layer.type === "iso-hard" ? "Hard" : "Smooth"} isochronic · ${fmtHz(carrier)} carrier`,
-      formula: "carrier tone amplitude is modulated by beat-rate LFO",
+      label: `${layer.type === "iso-hard" ? "Hard" : layer.type === "iso-trap" ? "Trapezoid" : "Smooth"} isochronic · ${fmtHz(carrier)} carrier`,
+      formula:
+        layer.type === "iso-trap"
+          ? "carrier amplitude uses raised-edge trapezoid pulses at beat Hz; edge/duty shape the silent gap"
+          : "carrier tone amplitude is modulated by beat-rate LFO",
       requiresHeadphones: false,
       panNote: panNote(layer),
       points: keyframes.map((k) => ({

@@ -110,6 +110,22 @@ export function analyzeSession(input: any): ProtocolAnalysis {
           `Binaural beat ${layerMaxBeat.toFixed(1)} Hz exceeds the practical fusion ceiling; use monaural or isochronic for this rate.`,
           layer,
         );
+      if (layer.type === "iso-trap" && layerMaxBeat > 10)
+        push(
+          issues,
+          "info",
+          "iso-pulse-fusion",
+          `Trap isochronic ${layerMaxBeat.toFixed(1)} Hz will likely read as a fused rough focus buzz, not individually countable pulses.`,
+          layer,
+        );
+      if (layer.type === "iso-trap" && layerMaxBeat >= 4 && layerMaxBeat <= 8)
+        push(
+          issues,
+          "info",
+          "iso-countable-pulses",
+          `Trap isochronic ${layerMaxBeat.toFixed(1)} Hz is in the practical range for consciously distinguishing separate pulses.`,
+          layer,
+        );
       if ((layer.carrierHz || 0) > 1000 && layer.type === "binaural")
         push(
           issues,

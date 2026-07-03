@@ -2,6 +2,7 @@ export type LayerType =
   | "binaural"
   | "monaural"
   | "iso-smooth"
+  | "iso-trap"
   | "iso-hard"
   | "carrier"
   | "noise"
@@ -31,6 +32,12 @@ export type KarplusConfig = {
   brightness: number;
   durationSec: number;
 };
+export type IsoPulseConfig = {
+  /** Edge time for trapezoid isochronic pulses. Lower = sharper/crisper, higher = smoother. */
+  edgeMs: number;
+  /** Fraction of each beat period occupied by the pulse, before the silent gap. */
+  duty: number;
+};
 export type TemplateTier = "free" | "holder" | "pro" | "collector";
 export type SessionLoopMode = "repeat" | "hold-last" | "crossfade-repeat";
 
@@ -38,12 +45,14 @@ export const BEAT_LAYER_TYPES: LayerType[] = [
   "binaural",
   "monaural",
   "iso-smooth",
+  "iso-trap",
   "iso-hard",
 ];
 export const CARRIER_LAYER_TYPES: LayerType[] = [
   "binaural",
   "monaural",
   "iso-smooth",
+  "iso-trap",
   "iso-hard",
   "carrier",
   "additive",
@@ -195,6 +204,7 @@ export type EntrainLayerV1 = {
   partials?: AdditivePartial[]; // Additive synthesis partials; frequency = carrierHz * ratio * detune.
   envelope?: InstrumentEnvelope; // Fast instrument envelope for algorithmic instruments.
   karplus?: KarplusConfig; // Seeded Karplus-Strong pluck bed.
+  isoPulse?: IsoPulseConfig; // Trapezoid isochronic pulse shape: crisp clickless edges + silent gaps.
   mute?: boolean;
   solo?: boolean;
   keyframes: Keyframe[];
@@ -319,6 +329,7 @@ function sanitizeLayer(
     "binaural",
     "monaural",
     "iso-smooth",
+    "iso-trap",
     "iso-hard",
     "carrier",
     "noise",
@@ -381,6 +392,7 @@ function sanitizeLayer(
   const partials = sanitizePartials(l?.partials, type);
   const envelope = sanitizeEnvelope(l?.envelope);
   const karplus = sanitizeKarplus(l?.karplus);
+  const isoPulse = sanitizeIsoPulse(l?.isoPulse);
   return {
     id: String(l?.id || rid(`layer-${index}`)).slice(0, 80),
     type,
@@ -414,6 +426,7 @@ function sanitizeLayer(
     partials: type === "additive" ? partials : undefined,
     envelope: type === "additive" || type === "karplus" ? envelope : undefined,
     karplus: type === "karplus" ? karplus : undefined,
+    isoPulse: type === "iso-trap" ? isoPulse : undefined,
     mute: !!l?.mute,
     solo: !!l?.solo,
     keyframes,
@@ -463,6 +476,13 @@ function sanitizeKarplus(cfg: any): KarplusConfig {
     decay: clampNum(cfg?.decay ?? 0.996, 0.9, 0.9999),
     brightness: clampNum(cfg?.brightness ?? 0.5, 0, 1),
     durationSec: clampNum(cfg?.durationSec ?? 6, 1, 30),
+  };
+}
+
+function sanitizeIsoPulse(cfg: any): IsoPulseConfig {
+  return {
+    edgeMs: clampNum(cfg?.edgeMs ?? 8, 1, 40),
+    duty: clampNum(cfg?.duty ?? 0.45, 0.1, 0.9),
   };
 }
 

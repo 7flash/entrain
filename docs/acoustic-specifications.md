@@ -49,10 +49,11 @@ Isochronic amplitude envelopes use full-depth gating:
 
 ```text
 smooth = (1 + sine_lfo) / 2
+trap   = raised-edge trapezoid pulse, default edgeMs=8, duty=0.45
 hard   = (1 + square_lfo) / 2
 ```
 
-The smooth form is a raised-cosine pulse train that reaches silence while avoiding hard edges. The hard form is a full-depth gate and should be used carefully at low volume.
+The smooth form reaches silence with rounded Hann-like edges. Trap mode is the preferred crisp isochronic mode for operator-built focus drills: it reaches true silence, keeps a flat pulse top, and uses millisecond rise/fall ramps to avoid raw-square clicks. The hard form is a full-depth square gate and should be used carefully at low volume.
 
 ## Mix safety
 

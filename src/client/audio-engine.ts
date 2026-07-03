@@ -271,6 +271,24 @@ export function createAudioEngine(getSession: () => EntrainSessionV1) {
     );
     const amp = ctx.createGain();
     amp.gain.value = 0;
+    car.connect(amp);
+    amp.connect(input);
+    if (l.type === "iso-trap") {
+      scheduleTrapGate(
+        amp.gain,
+        l,
+        ctx,
+        start,
+        stopAt,
+        offsetSec,
+        !!live,
+        cleanups,
+      );
+      car.start(start);
+      car.stop(stopAt);
+      stops.push(car);
+      return { node: layerGain, stops };
+    }
     const lfo = ctx.createOscillator();
     lfo.type = l.type === "iso-hard" ? "square" : "sine";
     scheduleParam(
@@ -289,8 +307,6 @@ export function createAudioEngine(getSession: () => EntrainSessionV1) {
     lfo.connect(mg);
     mg.connect(amp.gain);
     off.connect(amp.gain);
-    car.connect(amp);
-    amp.connect(input);
     car.start(start);
     lfo.start(start);
     off.start(start);
@@ -695,6 +711,115 @@ function buildAdditiveLayer(
     stops.push(osc);
   }
   return stops;
+}
+
+const trapCurveCache = new Map<string, Float32Array>();
+
+function makeTrapCurve(period: number, edgeMs: number, duty: number) {
+  const safePeriod = Math.max(1 / 80, period);
+  const safeDuty = clamp(duty, 0.1, 0.9);
+  const on = safePeriod * safeDuty;
+  const edge = Math.min(
+    Math.max(0.001, edgeMs / 1000),
+    on * 0.45,
+    Math.max(0.001, (safePeriod - on) * 0.45),
+  );
+  const key = `${safePeriod.toFixed(5)}:${edge.toFixed(4)}:${safeDuty.toFixed(3)}`;
+  const cached = trapCurveCache.get(key);
+  if (cached) return cached;
+  const n = 192;
+  const curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const t = (i / (n - 1)) * safePeriod;
+    curve[i] =
+      t < edge ? t / edge : t < on - edge ? 1 : t < on ? (on - t) / edge : 0;
+  }
+  trapCurveCache.set(key, curve);
+  return curve;
+}
+
+function trapPulseValue(
+  phase: number,
+  period: number,
+  edgeMs: number,
+  duty: number,
+) {
+  const on = period * clamp(duty, 0.1, 0.9);
+  const edge = Math.min(
+    Math.max(0.001, edgeMs / 1000),
+    on * 0.45,
+    Math.max(0.001, (period - on) * 0.45),
+  );
+  if (phase < edge) return phase / edge;
+  if (phase < on - edge) return 1;
+  if (phase < on) return (on - phase) / edge;
+  return 0;
+}
+
+function scheduleTrapGate(
+  param: AudioParam,
+  l: EntrainLayerV1,
+  ctx: BaseAudioContext,
+  start: number,
+  stopAt: number,
+  offsetSec = 0,
+  live = false,
+  cleanups: Array<() => void> = [],
+) {
+  const cfg = l.isoPulse || { edgeMs: 8, duty: 0.45 };
+  const beat0 = Math.max(
+    0.001,
+    sampleTimeline(l.keyframes, "beatHz", offsetSec / 60),
+  );
+  const period0 = 1 / beat0;
+  const phase0 = ((Math.max(0, offsetSec) % period0) + period0) % period0;
+  param.setValueAtTime(
+    trapPulseValue(phase0, period0, cfg.edgeMs, cfg.duty),
+    start,
+  );
+  let nextT = start + (phase0 > 0.0005 ? period0 - phase0 : 0);
+
+  const scheduleOne = (at: number) => {
+    if (at >= stopAt - 0.001) return;
+    const patternSec = Math.max(0, offsetSec + (at - start));
+    const beat = sampleTimeline(l.keyframes, "beatHz", patternSec / 60);
+    if (!Number.isFinite(beat) || beat < 0.05) {
+      nextT = at + 0.5;
+      param.setValueAtTime(0, at);
+      return;
+    }
+    const period = 1 / clamp(beat, 0.05, 80);
+    const curve = makeTrapCurve(period, cfg.edgeMs, cfg.duty);
+    try {
+      param.setValueCurveAtTime(curve, Math.max(start, at), period);
+    } catch {
+      param.setValueAtTime(0, Math.max(start, at));
+    }
+    nextT = at + period;
+  };
+
+  const scheduleUntil = (horizonAbs: number, maxPulses = 250000) => {
+    let guard = 0;
+    while (nextT < Math.min(stopAt, horizonAbs) && guard++ < maxPulses)
+      scheduleOne(nextT);
+  };
+
+  if (!live) {
+    scheduleUntil(stopAt);
+    return;
+  }
+  const LOOKAHEAD_SEC = 30;
+  scheduleUntil(Math.min(stopAt, start + LOOKAHEAD_SEC), 5000);
+  const timer = setInterval(() => {
+    const now = "currentTime" in ctx ? ctx.currentTime : start;
+    if (now + LOOKAHEAD_SEC >= stopAt) {
+      scheduleUntil(stopAt, 5000);
+      clearInterval(timer);
+      return;
+    }
+    scheduleUntil(now + LOOKAHEAD_SEC, 5000);
+  }, 5000);
+  cleanups.push(() => clearInterval(timer));
 }
 
 function buildKarplusLayer(

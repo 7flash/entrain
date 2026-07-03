@@ -59,8 +59,12 @@ export function sessionToPatternText(input: any) {
         first?.beatHz === last?.beatHz
           ? `${first?.beatHz || 10}`
           : `${first?.beatHz || 10}->${last?.beatHz || first?.beatHz || 10}`;
+      const pulse =
+        l.type === "iso-trap"
+          ? ` edge=${l.isoPulse?.edgeMs || 8}ms duty=${l.isoPulse?.duty || 0.45}`
+          : "";
       lines.push(
-        `${l.type} carrier=${l.carrierHz || 220} beat=${beat} gain=${g}`,
+        `${l.type} carrier=${l.carrierHz || 220} beat=${beat} gain=${g}${pulse}`,
       );
     }
   }
@@ -166,7 +170,11 @@ export function patternTextToSession(text: string): EntrainSessionV1 {
         pan: 0,
         keyframes: kfs(durationMin, undefined, pct(args.gain, 18)),
       });
-    else if (["binaural", "monaural", "iso-smooth", "iso-hard"].includes(cmd)) {
+    else if (
+      ["binaural", "monaural", "iso-smooth", "iso-trap", "iso-hard"].includes(
+        cmd,
+      )
+    ) {
       const beat = String(args.beat || "10")
         .split("->")
         .map(Number);
@@ -175,6 +183,13 @@ export function patternTextToSession(text: string): EntrainSessionV1 {
         type: cmd,
         carrierHz: Number(args.carrier || 220),
         wave: "sine",
+        isoPulse:
+          cmd === "iso-trap"
+            ? {
+                edgeMs: Number(String(args.edge || "8").replace("ms", "")),
+                duty: Number(args.duty || 0.45),
+              }
+            : undefined,
         keyframes: kfs(
           durationMin,
           [beat[0] || 10, beat[1] || beat[0] || 10],

@@ -47,6 +47,7 @@ const layerTypes: LayerType[] = [
   "binaural",
   "monaural",
   "iso-smooth",
+  "iso-trap",
   "iso-hard",
   "carrier",
   "noise",
@@ -557,6 +558,7 @@ function LayerCard({
               </select>
             </div>
           ) : null}
+          {l.type === "iso-trap" ? <IsoTrapControls l={l} /> : null}
           {l.type === "noise" ? (
             <div className="field">
               <label>Noise color</label>
@@ -673,19 +675,27 @@ function OperatorGuide() {
           before adding modulation.
         </li>
         <li>
-          Switch method to <b>Isochronic smooth</b>. Beat Hz is volume pulses
-          per second, not pitch.
+          Switch method to <b>Isochronic trap</b> for crisp clickless pulses, or{" "}
+          <b>Isochronic smooth</b> for a gentler Hann-shaped pulse. Beat Hz is
+          volume pulses per second, not pitch.
         </li>
         <li>
           Start near 0 Hz, then increase slowly until you can still distinguish
-          separate pulses. Stay below the point where they merge into one
-          continuous buzz.
+          separate pulses. Countable pulses usually live around 4–8 Hz; by
+          ~10–18 Hz they fuse into a rough focus buzz, which can still be useful
+          but is no longer a beat-counting drill.
         </li>
         <li>
           Create a new point tab to clone the whole stack at a later timestamp.
           Change carrier/beat/gain there; ENTRAIN interpolates continuously
           between point tabs when it converts this view into the session
           algorithm.
+        </li>
+        <li>
+          Do not confuse protocols: a conscious pulse-counting focus drill, an
+          SMR/beta focus buzz, and a Holosync-style descent are different arcs.
+          The UI can build all three, but the operator should choose one
+          intention per track.
         </li>
       </ol>
     </details>
@@ -769,6 +779,54 @@ function AnalysisCard({
         <div className="small">No blocking issues found.</div>
       )}
     </div>
+  );
+}
+
+function IsoTrapControls({ l }: { l: EntrainLayerV1 }) {
+  const cfg = l.isoPulse || { edgeMs: 8, duty: 0.45 };
+  return (
+    <>
+      <div className="field">
+        <label>
+          Pulse edge <b>{cfg.edgeMs} ms</b>
+        </label>
+        <input
+          type="range"
+          min="1"
+          max="40"
+          step="1"
+          value={String(cfg.edgeMs)}
+          onInput={(e: any) => {
+            l.isoPulse = { ...cfg, edgeMs: Number(e.currentTarget.value) };
+            repaint(true);
+          }}
+        />
+      </div>
+      <div className="field">
+        <label>
+          Pulse duty <b>{Math.round(cfg.duty * 100)}%</b>
+        </label>
+        <input
+          type="range"
+          min="0.1"
+          max="0.9"
+          step="0.01"
+          value={String(cfg.duty)}
+          onInput={(e: any) => {
+            l.isoPulse = { ...cfg, duty: Number(e.currentTarget.value) };
+            repaint(true);
+          }}
+        />
+      </div>
+      <div className="field wide">
+        <p className="small">
+          Trap mode uses a raised-edge pulse train: steep enough to read as
+          separate isochronic pulses, with millisecond ramps to avoid raw-square
+          clicks. Lower edge = sharper; lower duty = more silence between
+          pulses.
+        </p>
+      </div>
+    </>
   );
 }
 
@@ -1219,6 +1277,7 @@ function layerTypeLabel(t: LayerType) {
         binaural: "Binaural",
         monaural: "Monaural",
         "iso-smooth": "Isochronic smooth",
+        "iso-trap": "Isochronic trap",
         "iso-hard": "Isochronic hard",
         carrier: "Plain carrier",
         noise: "Noise bed",
@@ -1243,9 +1302,10 @@ function addBandLayer(hz: number) {
   const carrier = hz >= 30 ? 300 : 220;
   session.layers.push({
     id: uid(),
-    type: "iso-smooth",
+    type: "iso-trap",
     carrierHz: carrier,
     wave: "sine",
+    isoPulse: { edgeMs: 8, duty: 0.45 },
     keyframes: [
       { tMin: 0, carrierHz: carrier, beatHz: hz, gainPct: 32 },
       {
@@ -1519,6 +1579,11 @@ function changeType(l: EntrainLayerV1, type: LayerType) {
     l.pan = undefined;
     l.panMotion = undefined;
   }
+  if (type === "iso-trap") {
+    l.isoPulse = l.isoPulse || { edgeMs: 8, duty: 0.45 };
+  } else {
+    l.isoPulse = undefined;
+  }
   if (type === "noise") l.noiseColor = l.noiseColor || "pink";
   if (type === "procedural-ambience") {
     l.ambienceRecipe = l.ambienceRecipe || "pink-rain";
@@ -1574,7 +1639,7 @@ function addLayer() {
     ],
   });
   notice =
-    "added plain carrier; verify it sounds steady, then switch method to isochronic smooth";
+    "added plain carrier; verify it sounds steady, then switch method to isochronic trap for crisp pulses";
   repaint(true);
 }
 function addNoise() {

@@ -21,7 +21,7 @@ export type ProtocolLineageV1 = {
 
 export type ReferenceBeatLayer = {
   label: string;
-  type: "binaural" | "monaural" | "iso-smooth" | "iso-hard";
+  type: "binaural" | "monaural" | "iso-smooth" | "iso-trap" | "iso-hard";
   carrierHz: number;
   beats: Array<{ tMin: number; beatHz: number; gainPct?: number }>;
 };

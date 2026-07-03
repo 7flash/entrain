@@ -59,7 +59,7 @@ function lineage(
   };
 }
 
-export const BUILTIN_SOUNDTRACK_REVISION = "builtin-v22-engine-security-glides";
+export const BUILTIN_SOUNDTRACK_REVISION = "builtin-v24-iso-trap";
 
 export const seedTemplates: EntrainTemplateV1[] = [
   t({
@@ -110,9 +110,10 @@ export const seedTemplates: EntrainTemplateV1[] = [
     session: s("Beta Focus Drill", 20, [
       {
         id: "beta-iso",
-        type: "iso-smooth",
+        type: "iso-trap",
         carrierHz: 260,
         wave: "sine",
+        isoPulse: { edgeMs: 8, duty: 0.45 },
         pan: 0,
         panMotion: { rateHz: 0.02, depth: 0.2 },
         keyframes: [
@@ -552,9 +553,10 @@ export const seedTemplates: EntrainTemplateV1[] = [
       },
       {
         id: "iso-40",
-        type: "iso-smooth",
+        type: "iso-trap",
         carrierHz: 220,
         wave: "sine",
+        isoPulse: { edgeMs: 4, duty: 0.45 },
         pan: 0,
         panMotion: { rateHz: 0.011, depth: 0.14 },
         keyframes: [
