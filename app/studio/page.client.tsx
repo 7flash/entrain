@@ -302,29 +302,14 @@ function App() {
               <button className="act" onClick={clearAutosave}>
                 Clear autosave
               </button>
-              <button className="act" onClick={exportJson}>
-                Export JSON
-              </button>
-              <button className="act" onClick={copyAlgorithmJson}>
-                Copy algorithm JSON
+              <button className="act primary" onClick={copySbagenText}>
+                Copy SBaGen script
               </button>
               <button className="act" onClick={copyPatternText}>
-                Copy pattern
-              </button>
-              <button className="act" onClick={copySbagenText}>
-                Copy SBaGen
+                Copy ENTRAIN script
               </button>
               <label className="act file-act">
-                Import JSON
-                <input
-                  type="file"
-                  accept=".json,application/json"
-                  style={{ display: "none" }}
-                  onChange={importJson}
-                />
-              </label>
-              <label className="act file-act">
-                Import pattern/SBaGen
+                Import SBaGen/script
                 <input
                   type="file"
                   accept=".txt,.sbagen,text/plain"
@@ -332,6 +317,26 @@ function App() {
                   onChange={importPatternText}
                 />
               </label>
+              <details className="debug-details">
+                <summary>Advanced raw JSON cache</summary>
+                <div className="studio-file-actions">
+                  <button className="act" onClick={exportJson}>
+                    Export compiled JSON
+                  </button>
+                  <button className="act" onClick={copyAlgorithmJson}>
+                    Copy compiled JSON
+                  </button>
+                  <label className="act file-act">
+                    Import compiled JSON
+                    <input
+                      type="file"
+                      accept=".json,application/json"
+                      style={{ display: "none" }}
+                      onChange={importJson}
+                    />
+                  </label>
+                </div>
+              </details>
             </div>
             {lastShare ? (
               <div className="share-meta mono">
@@ -929,7 +934,7 @@ function coachPlan(analysis: ReturnType<typeof analyzeSession>) {
         "Private share URLs only encode the algorithm and deterministic seeds, not local files.",
       actions: [
         { label: "Make portable copy", primary: true, fn: makePortableCopy },
-        { label: "Copy JSON instead", fn: copyAlgorithmJson },
+        { label: "Copy SBaGen script", fn: copySbagenText },
       ],
     };
   if (analysis.issues.some((i) => i.level === "error"))
@@ -938,7 +943,7 @@ function coachPlan(analysis: ReturnType<typeof analyzeSession>) {
       body: "The protocol analyzer found a hard issue. Open the analyzer card and adjust the layer that triggered it.",
       micro: `${analysis.issues.filter((i) => i.level === "error").length} error(s) · ${analysis.estimatedPeakDb.toFixed(1)} dBFS estimated peak`,
       actions: [
-        { label: "Copy algorithm JSON", fn: copyAlgorithmJson },
+        { label: "Copy SBaGen script", fn: copySbagenText },
         { label: "Render WAV anyway", fn: () => void exportWav() },
       ],
     };
@@ -1183,9 +1188,13 @@ function OperatorGuide() {
         </li>
         <li>
           Create a new point tab to clone the whole stack at a later timestamp.
-          Change carrier/beat/gain there; ENTRAIN interpolates continuously
-          between point tabs when it converts this view into the session
-          algorithm.
+          Change carrier/beat/gain there; ENTRAIN exports that timeline as
+          SBaGen-style states and transitions.
+        </li>
+        <li>
+          During playback the compiled graph uses Web Audio frequency ramps,
+          which integrate phase correctly. A 10→2.5 Hz glide reaches 2.5 Hz at
+          the scheduled endpoint, not halfway through.
         </li>
         <li>
           Do not confuse protocols: a conscious pulse-counting focus drill, an
@@ -1242,8 +1251,10 @@ function GlobalPointTabs() {
       <PointInspector />
       <p className="small">
         Each point is a full snapshot of the layer stack. Between adjacent
-        points, carrier frequency, beat Hz, and gain interpolate linearly in the
-        playable ENTRAIN format.
+        points, carrier frequency, beat Hz, and gain interpolate linearly.
+        Oscillator frequency ramps are scheduled as AudioParams, so the browser
+        integrates phase correctly instead of using the broken sin(2π·f(t)·t)
+        shortcut.
       </p>
     </div>
   );
@@ -2687,7 +2698,7 @@ async function copyAlgorithmJson() {
   await navigator.clipboard
     .writeText(JSON.stringify(sanitizeSession(session), null, 2))
     .catch(() => {});
-  notice = "playable ENTRAIN algorithm JSON copied";
+  notice = "compiled JSON cache copied (debug only)";
   repaint();
 }
 async function copyPatternText() {
@@ -2768,12 +2779,22 @@ async function copyShareCapsule() {
 }
 async function importShareString() {
   const text = prompt(
-    "Paste an ENTRAIN private URL, #es hash, ENTRAIN capsule, or raw session JSON",
+    "Paste an ENTRAIN private URL, #es hash, capsule, SBaGen/ENTRAIN script, or compiled JSON",
   );
   if (!text) return;
   try {
-    const next = await decodeSessionFromString(text);
-    if (!next) throw new Error("No ENTRAIN session found in pasted text.");
+    let next = await decodeSessionFromString(text);
+    if (!next) {
+      if (looksLikeSbagen(text)) next = sbagenTextToSession(text).session;
+      else if (
+        /^(name|duration|loop|binaural|monaural|iso-|noise|ambience|carrier|additive|karplus)\b/im.test(
+          text,
+        )
+      )
+        next = patternTextToSession(text);
+    }
+    if (!next)
+      throw new Error("No ENTRAIN session or script found in pasted text.");
     engine.stop();
     session = next;
     engine = createAudioEngine(() => session);

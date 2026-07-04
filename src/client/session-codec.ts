@@ -64,7 +64,7 @@ export async function encodeSessionUrl(
     );
   if (hash.length > 120_000)
     warnings.push(
-      "This share payload is very large. Export JSON as a fallback.",
+      "This share payload is very large. Copy the capsule or SBaGen/ENTRAIN script as a fallback.",
     );
   return {
     hash,

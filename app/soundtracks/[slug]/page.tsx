@@ -153,6 +153,14 @@ export default function SoundtrackDetailPage({ params }: Props) {
           </div>
         </article>
         <article className="card">
+          <h3>SBaGen source script</h3>
+          <p className="small">
+            This is the stored catalogue source. The player compiles it into the
+            runtime graph locally; JSON is only the internal cache.
+          </p>
+          <pre className="scriptbox mono">
+            {template.scriptText || "# no source script stored"}
+          </pre>
           <h3>Signal map</h3>
           <p className="small">
             Pattern length: {template.session.durationMin} minutes ·{" "}

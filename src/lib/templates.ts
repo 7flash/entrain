@@ -9,6 +9,7 @@ import {
   summarizeSession,
 } from "@/format/entrain-format";
 import { analyzeSession } from "@/format/protocol-analyzer";
+import { sessionToSbagenText, sbagenTextToSession } from "@/format/sbagen";
 import {
   compareToReference,
   type ProtocolLineageV1,
@@ -59,8 +60,7 @@ function lineage(
   };
 }
 
-export const BUILTIN_SOUNDTRACK_REVISION =
-  "builtin-v31-public-library-focus-stages";
+export const BUILTIN_SOUNDTRACK_REVISION = "builtin-v32-sbagen-source-db";
 
 export const seedTemplates: EntrainTemplateV1[] = [
   t({
@@ -885,7 +885,9 @@ export function rowFromTemplate(
     tags: template.tags,
     minTokens: template.minTokens,
     unlockNote: template.unlockNote || "",
-    session: template.session,
+    session: template.session, // compiled player cache
+    scriptFormat: template.scriptFormat || "sbagen.v1",
+    scriptText: template.scriptText || sessionToSbagenText(template.session),
     sortOrder,
     isPublished: true,
     status: "published",
@@ -982,7 +984,18 @@ function normalizeTemplate(row: any): EntrainTemplateV1 {
     tags,
     minTokens,
     unlockNote: row.unlockNote || undefined,
-    session: sanitizeSession(row.session),
+    session: sanitizeSession(
+      row.session ||
+        (row.scriptText
+          ? sbagenTextToSession(row.scriptText, {
+              name: row.title,
+              defaultDurationMin: 20,
+            }).session
+          : undefined),
+    ),
+    scriptFormat: row.scriptFormat || "sbagen.v1",
+    scriptText:
+      row.scriptText || sessionToSbagenText(sanitizeSession(row.session)),
     lineage: row.lineageJson || row.lineage || undefined,
     ownerPublicKey: row.ownerPublicKey || undefined,
     creatorName: row.creatorName || undefined,
@@ -1038,6 +1051,7 @@ function signalProjection(session: EntrainSessionV1) {
       keyframes: l.keyframes.map((k) => ({
         tMin: k.tMin,
         beatHz: k.beatHz,
+        carrierHz: k.carrierHz,
         gainPct: k.gainPct,
       })),
     })),

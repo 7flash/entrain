@@ -21,7 +21,9 @@ export const db = new Database(
       tags: z.array(z.string()).default([]),
       minTokens: z.number().default(0),
       unlockNote: z.string().optional(),
-      session: z.any(),
+      session: z.any(), // compiled runtime cache used by the player
+      scriptFormat: z.string().default("sbagen.v1"),
+      scriptText: z.string().default(""),
       sortOrder: z.number().default(0),
       isPublished: z.boolean().default(true),
       status: z.string().default("published"),
@@ -164,6 +166,8 @@ export type TemplateRow = {
   minTokens: number;
   unlockNote?: string;
   session: EntrainSessionV1;
+  scriptFormat?: string;
+  scriptText?: string;
   sortOrder: number;
   isPublished: boolean;
   status?: string;

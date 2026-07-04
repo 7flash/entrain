@@ -235,7 +235,9 @@ export type EntrainTemplateV1 = {
   tags: string[];
   minTokens: number;
   unlockNote?: string;
-  session: EntrainSessionV1;
+  session: EntrainSessionV1; // compiled runtime cache from scriptText
+  scriptFormat?: "sbagen.v1" | "entrain-script.v1";
+  scriptText?: string;
   evidenceLevel?: "experimental" | "relaxation" | "focus" | "sleep-support";
   lineage?: ProtocolLineageV1;
   ownerPublicKey?: string;
