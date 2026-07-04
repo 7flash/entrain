@@ -10,7 +10,12 @@ import {
   protocolReferences,
 } from "@/format/protocol-reference";
 import { signalMapForSession, formatSignalPoint } from "@/format/channel-map";
-import { sbagenTextToSession, sessionToSbagenText } from "@/format/sbagen";
+import {
+  looksLikeSbagen,
+  sbagenTextToSession,
+  sessionToSbagenText,
+} from "@/format/sbagen";
+import { patternTextToSession } from "@/format/pattern-text";
 
 let adminToken = localStorage.getItem("entrain:admin-token") || "";
 let rows: any[] = [];
@@ -33,6 +38,8 @@ function freshRow() {
     isPublished: true,
     status: "published",
     copyReviewed: false,
+    scriptFormat: "sbagen.v1",
+    scriptText: sessionToSbagenText(session),
     sessionText: JSON.stringify(session, null, 2),
     lineageText: JSON.stringify(
       {
@@ -339,28 +346,44 @@ function App() {
               </table>
             </div>
           ) : null}
-          <Field label="Lineage / accuracy JSON">
+          <Field label="SBaGen source script stored in database">
             <textarea
               className="mono"
-              rows={8}
-              value={selected.lineageText || ""}
+              rows={12}
+              value={selected.scriptText || ""}
               onInput={(e: any) => {
-                selected.lineageText = e.currentTarget.value;
-                paint();
+                selected.scriptText = e.currentTarget.value;
+                syncScriptPreview();
               }}
             />
           </Field>
-          <Field label="ENTRAIN session JSON">
-            <textarea
-              className="mono"
-              rows={18}
-              value={selected.sessionText}
-              onInput={(e: any) => {
-                selected.sessionText = e.currentTarget.value;
-                paint();
-              }}
-            />
-          </Field>
+          <details className="notice">
+            <summary>
+              <strong>Advanced raw compiled cache / lineage</strong>
+            </summary>
+            <Field label="Lineage / accuracy JSON">
+              <textarea
+                className="mono"
+                rows={8}
+                value={selected.lineageText || ""}
+                onInput={(e: any) => {
+                  selected.lineageText = e.currentTarget.value;
+                  paint();
+                }}
+              />
+            </Field>
+            <Field label="ENTRAIN session JSON cache">
+              <textarea
+                className="mono"
+                rows={18}
+                value={selected.sessionText}
+                onInput={(e: any) => {
+                  selected.sessionText = e.currentTarget.value;
+                  paint();
+                }}
+              />
+            </Field>
+          </details>
           <div className="tagrow">
             <label className="btn">
               Import SBaGen script
@@ -415,18 +438,40 @@ function setReferenceId(referenceId: string) {
   selected.lineageText = JSON.stringify(x, null, 2);
   paint();
 }
+function compileSelectedScript() {
+  const text = String(selected.scriptText || "").trim();
+  if (!text) return null;
+  try {
+    return looksLikeSbagen(text)
+      ? sbagenTextToSession(text, { name: selected.title || selected.slug })
+          .session
+      : patternTextToSession(text);
+  } catch {
+    return null;
+  }
+}
 function parseSelectedSession() {
+  const compiled = compileSelectedScript();
+  if (compiled) return sanitizeSession(compiled);
   try {
     return sanitizeSession(JSON.parse(selected.sessionText));
   } catch {
     return null;
   }
 }
+function syncScriptPreview() {
+  const compiled = compileSelectedScript();
+  if (compiled)
+    selected.sessionText = JSON.stringify(sanitizeSession(compiled), null, 2);
+  paint();
+}
 function editRow(r: any) {
   selected = {
     ...r,
     copyReviewed: !!r.copyReviewed,
     tags: Array.isArray(r.tags) ? r.tags.join(", ") : r.tags,
+    scriptFormat: r.scriptFormat || "sbagen.v1",
+    scriptText: r.scriptText || sessionToSbagenText(r.session),
     sessionText: JSON.stringify(r.session, null, 2),
     lineageText: JSON.stringify(
       r.lineageJson ||
@@ -464,9 +509,12 @@ async function importSbagenToSelected(e: any) {
   const f = e.currentTarget.files?.[0];
   if (!f) return;
   try {
-    const r = sbagenTextToSession(await f.text(), {
+    const text = await f.text();
+    const r = sbagenTextToSession(text, {
       name: selected.title || selected.slug,
     });
+    selected.scriptText = text;
+    selected.scriptFormat = "sbagen.v1";
     selected.sessionText = JSON.stringify(r.session, null, 2);
     message = `imported SBaGen script${r.warnings.length ? ` · ${r.warnings.length} note(s)` : ""}`;
   } catch (err: any) {
@@ -478,14 +526,16 @@ async function importSbagenToSelected(e: any) {
 async function copySelectedSbagen() {
   const parsed = parseSelectedSession();
   if (!parsed) {
-    message = "Cannot parse session JSON.";
+    message = "Cannot compile script/session.";
     paint();
     return;
   }
   await navigator.clipboard
-    .writeText(sessionToSbagenText(parsed))
+    .writeText(
+      String(selected.scriptText || "").trim() || sessionToSbagenText(parsed),
+    )
     .catch(() => {});
-  message = "SBaGen-compatible script copied";
+  message = "SBaGen-compatible source copied";
   paint();
 }
 function loadFromEditor() {
@@ -498,12 +548,11 @@ function loadFromEditor() {
     paint();
     return;
   }
-  selected.sessionText = JSON.stringify(
-    sanitizeSession(JSON.parse(raw)),
-    null,
-    2,
-  );
-  message = "copied session from browser handoff";
+  const fromEditor = sanitizeSession(JSON.parse(raw));
+  selected.sessionText = JSON.stringify(fromEditor, null, 2);
+  selected.scriptText = sessionToSbagenText(fromEditor);
+  selected.scriptFormat = "sbagen.v1";
+  message = "copied session from browser handoff and generated SBaGen source";
   paint();
 }
 async function saveRow() {
@@ -511,7 +560,10 @@ async function saveRow() {
   message = "saving…";
   paint();
   try {
-    const session = sanitizeSession(JSON.parse(selected.sessionText));
+    const session = parseSelectedSession();
+    if (!session)
+      throw new Error("Cannot compile SBaGen source or JSON cache.");
+    selected.sessionText = JSON.stringify(session, null, 2);
     const a = analyzeSession(session);
     const lineageJson = parseLineage();
     const refMatch = lineageJson?.referenceId
@@ -541,6 +593,10 @@ async function saveRow() {
         .map((x) => x.trim())
         .filter(Boolean),
       session,
+      scriptFormat: selected.scriptFormat || "sbagen.v1",
+      scriptText:
+        String(selected.scriptText || "").trim() ||
+        sessionToSbagenText(session),
       lineageJson,
       analysisJson: a,
       safetyJson: { claimRisk: c, referenceMatch: refMatch },

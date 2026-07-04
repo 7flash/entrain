@@ -1,6 +1,11 @@
 import { db } from "@/lib/db";
 import { isAdminRequest } from "@/lib/admin-auth";
 import { sanitizeSession } from "@/format/entrain-format";
+import { looksLikeSbagen, sbagenTextToSession } from "@/format/sbagen";
+import {
+  patternTextToSession,
+  sessionToSbagenText,
+} from "@/format/pattern-text";
 import { analyzeSession, claimRisk } from "@/format/protocol-analyzer";
 import { compareToReference } from "@/format/protocol-reference";
 import { json, readJson } from "@/lib/http";
@@ -18,6 +23,8 @@ type Body = {
   minTokens?: number;
   unlockNote?: string;
   session?: any;
+  scriptFormat?: string;
+  scriptText?: string;
   sortOrder?: number;
   isPublished?: boolean;
   status?: "draft" | "published" | "archived";
@@ -70,9 +77,27 @@ export async function POST(req: Request) {
         .split(",")
         .map((x) => x.trim())
         .filter(Boolean);
-  const session = sanitizeSession(
+  const scriptText = String(body?.scriptText || "").trim();
+  const scriptFormat = String(
+    body?.scriptFormat ||
+      (scriptText
+        ? looksLikeSbagen(scriptText)
+          ? "sbagen.v1"
+          : "entrain-script.v1"
+        : "sbagen.v1"),
+  );
+  let session = sanitizeSession(
     body?.session || { name: body?.title || slug, durationMin: 20, layers: [] },
   );
+  if (scriptText) {
+    session = looksLikeSbagen(scriptText)
+      ? sbagenTextToSession(scriptText, {
+          name: body?.title || slug,
+          defaultDurationMin: session.durationMin || 20,
+        }).session
+      : patternTextToSession(scriptText);
+    if (body?.title) session.name = String(body.title);
+  }
   const analysis = analyzeSession(session);
   const lineageJson =
     body?.lineageJson && typeof body.lineageJson === "object"
@@ -112,6 +137,8 @@ export async function POST(req: Request) {
     minTokens,
     unlockNote: String(body?.unlockNote || "").slice(0, 1000),
     session,
+    scriptFormat,
+    scriptText: scriptText || sessionToSbagenText(session),
     sortOrder: Number(body?.sortOrder || 0),
     isPublished: wantsPublished,
     status:
