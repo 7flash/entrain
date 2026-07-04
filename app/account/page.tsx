@@ -2,12 +2,11 @@ export default function AccountPage() {
   return (
     <main>
       <section className="hero" style={{ paddingBottom: "14px" }}>
-        <span className="pill unlocked">personal account</span>
+        <span className="pill unlocked">Google account</span>
         <h1>Your account</h1>
         <p>
-          Connect Phantom to see private library access, room reward balance,
-          withdrawal requests, and account profile. Studio still works without
-          login.
+          Use Google sign-in for saved tracks and share links. Payments,
+          Phantom, room rewards, and token withdrawals are disabled.
         </p>
       </section>
       <section className="console" id="account-root">

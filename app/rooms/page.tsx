@@ -5,18 +5,13 @@ export default function RoomsPage() {
         <span className="pill unlocked">synced listening</span>
         <h1>Meditation rooms</h1>
         <p>
-          Listen to the same prepared soundtrack with other people. Audio is
-          still generated locally in each browser, but room timing keeps
-          everyone on the same soundtrack position.
-        </p>
-        <p className="small">
-          Anyone can join and stay synced. Connect Phantom before joining if you
-          want internal room rewards to accrue while the room is playing.
+          Rooms are public/free. Anyone with a room link can join synced
+          playback; no wallet, rewards, or payments.
         </p>
       </section>
       <section className="console" id="rooms-root">
         <div className="panel">
-          <p className="muted">Loading meditation rooms…</p>
+          <p className="muted">Loading rooms…</p>
         </div>
       </section>
     </main>

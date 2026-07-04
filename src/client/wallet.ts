@@ -1,23 +1,11 @@
-type PhantomProvider = {
-  isPhantom?: boolean;
-  publicKey?: { toString(): string };
-  connect(): Promise<{ publicKey: { toString(): string } }>;
-  signMessage(
-    message: Uint8Array,
-    encoding?: string,
-  ): Promise<{ signature: Uint8Array }>;
-};
-
-declare global {
-  interface Window {
-    phantom?: { solana?: PhantomProvider };
-    solana?: PhantomProvider;
-  }
-}
-
+// Legacy filename kept to avoid touching every old import. This is now Google account auth, not Phantom.
 export type WalletState = {
   authenticated: boolean;
   publicKey: string | null;
+  userId?: string | null;
+  email?: string | null;
+  name?: string | null;
+  picture?: string | null;
   balance: number;
   expiresAt?: number | null;
 };
@@ -29,199 +17,60 @@ export type TokenMeta = {
   solanaRpc?: string;
 };
 
-let tokenMetaPromise: Promise<TokenMeta> | null = null;
-let tokenMetaCache: TokenMeta = {
-  ticker: "WAVES",
-  displayName: "$WAVES",
-  chainId: "solana",
-  tokenAddress: "",
-  solanaRpc: "https://api.mainnet-beta.solana.com",
-};
-
 export async function getTokenMeta(): Promise<TokenMeta> {
-  if (!tokenMetaPromise) {
-    tokenMetaPromise = fetch("/api/token/config")
-      .then((x) => x.json())
-      .then((r) => {
-        tokenMetaCache = {
-          ticker: r.ticker || "WAVES",
-          displayName: r.displayName || "$WAVES",
-          chainId: r.chainId || "solana",
-          tokenAddress: r.tokenAddress || "",
-          solanaRpc: r.solanaRpc || tokenMetaCache.solanaRpc,
-        };
-        return tokenMetaCache;
-      })
-      .catch(() => tokenMetaCache);
-  }
-  return tokenMetaPromise;
+  return { ticker: "", displayName: "", chainId: "none", tokenAddress: "" };
 }
-
-export function tokenLabel(amount: number | string) {
-  return `${amount} ${tokenMetaCache.displayName}`;
-}
-
-function friendlyWalletError(message: string) {
-  const m = String(message || "wallet check failed");
-  if (m.includes("measure.assert") || m.includes("Verify wallet"))
-    return "Wallet verification failed. Please reconnect Phantom and sign the fresh message.";
-  if (/401|unauthorized/i.test(m))
-    return "Wallet access was denied or expired. Please reconnect Phantom.";
-  return m;
-}
-
-async function checkedJson(url: string, init?: RequestInit) {
-  const res = await fetch(url, init);
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok && !body.error)
-    body.error =
-      res.status === 401
-        ? "Unauthorized wallet request"
-        : `Request failed (${res.status})`;
-  return body;
+export function tokenLabel(_amount: number | string) {
+  return "";
 }
 
 export async function getWalletState(): Promise<WalletState> {
-  await getTokenMeta();
   const r = await fetch("/api/auth/session")
     .then((x) => x.json())
     .catch(() => ({ authenticated: false }));
   return {
     authenticated: !!r.authenticated,
-    publicKey: r.publicKey || null,
-    balance: Number(r.balance || 0),
+    publicKey: r.userId || null,
+    userId: r.userId || null,
+    email: r.email || null,
+    name: r.name || null,
+    picture: r.picture || null,
+    balance: 0,
     expiresAt: r.expiresAt || null,
   };
 }
 
 export async function refreshWalletBalance() {
-  await getTokenMeta();
   const r = await fetch("/api/auth/refresh", { method: "POST" }).then((x) =>
     x.json(),
   );
-  if (!r.ok) throw new Error(friendlyWalletError(r.error || "refresh failed"));
+  if (!r.ok) throw new Error(r.error || "session refresh failed");
   return {
     authenticated: true,
-    publicKey: r.publicKey || null,
-    balance: Number(r.balance || 0),
+    publicKey: r.userId || r.publicKey || null,
+    userId: r.userId || null,
+    email: r.email || null,
+    balance: 0,
     expiresAt: r.expiresAt || null,
   } as WalletState;
 }
 
 export async function connectAndVerify() {
-  await getTokenMeta();
-  const provider = window.phantom?.solana || window.solana;
-  if (!provider?.isPhantom) {
-    window.open("https://phantom.app/", "_blank");
-    throw new Error("Phantom not installed");
-  }
-  const conn = await provider.connect();
-  const publicKey = conn.publicKey.toString();
-  const challenge = await checkedJson("/api/auth/challenge", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ publicKey }),
-  });
-  if (!challenge.ok)
-    throw new Error(friendlyWalletError(challenge.error || "challenge failed"));
-  const encoded = new TextEncoder().encode(challenge.message);
-  const signed = await provider.signMessage(encoded, "utf8");
-  const signature = base58Encode(signed.signature);
-  const verified = await checkedJson("/api/auth/verify", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ publicKey, nonce: challenge.nonce, signature }),
-  });
-  if (!verified.ok)
-    throw new Error(friendlyWalletError(verified.error || "verify failed"));
-  return {
-    authenticated: true,
-    publicKey,
-    balance: Number(verified.balance || 0),
-    expiresAt: verified.expiresAt || null,
-  } as WalletState;
+  location.href = `/api/auth/google/start?next=${encodeURIComponent(location.pathname + location.search)}`;
+  throw new Error("Redirecting to Google sign-in…");
 }
 
-export function tierLabel(minTokens: number) {
-  if (minTokens >= 100) return "collector";
-  if (minTokens >= 10) return "pro";
-  if (minTokens >= 1) return "holder";
+export async function signOut() {
+  await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+  location.reload();
+}
+
+export function tierLabel(_minTokens: number) {
   return "free";
 }
 
-const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-function base58Encode(bytes: Uint8Array) {
-  let digits = [0];
-  for (let i = 0; i < bytes.length; i++) {
-    let carry = bytes[i];
-    for (let j = 0; j < digits.length; j++) {
-      carry += digits[j] << 8;
-      digits[j] = carry % 58;
-      carry = (carry / 58) | 0;
-    }
-    while (carry) {
-      digits.push(carry % 58);
-      carry = (carry / 58) | 0;
-    }
-  }
-  for (let k = 0; k < bytes.length && bytes[k] === 0; k++) digits.push(0);
-  return digits
-    .reverse()
-    .map((d) => alphabet[d])
-    .join("");
-}
-
-export async function paySol(
-  recipient: string,
-  lamports: number,
-  memo?: string,
-) {
-  const provider: any = window.phantom?.solana || window.solana;
-  if (!provider?.isPhantom) {
-    window.open("https://phantom.app/", "_blank");
-    throw new Error("Phantom not installed");
-  }
-  const {
-    Connection,
-    PublicKey,
-    SystemProgram,
-    Transaction,
-    TransactionInstruction,
-  } = await import("@solana/web3.js");
-  const conn = await provider.connect();
-  const from = conn.publicKey;
-  await getTokenMeta();
-  const connection = new Connection(
-    tokenMetaCache.solanaRpc || "https://api.mainnet-beta.solana.com",
-    "confirmed",
+export async function paySol() {
+  throw new Error(
+    "Payments are disabled. ENTRAIN now uses Google accounts and free sharing.",
   );
-  const tx = new Transaction().add(
-    SystemProgram.transfer({
-      fromPubkey: new PublicKey(from.toString()),
-      toPubkey: new PublicKey(recipient),
-      lamports: Math.floor(Number(lamports || 0)),
-    }),
-  );
-  if (memo) {
-    tx.add(
-      new TransactionInstruction({
-        keys: [],
-        programId: new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr"),
-        data: new TextEncoder().encode(memo),
-      }),
-    );
-  }
-  tx.feePayer = new PublicKey(from.toString());
-  const { blockhash, lastValidBlockHeight } =
-    await connection.getLatestBlockhash("confirmed");
-  tx.recentBlockhash = blockhash;
-  const sent = await provider.signAndSendTransaction(tx);
-  const signature = sent.signature || String(sent);
-  try {
-    await connection.confirmTransaction(
-      { signature, blockhash, lastValidBlockHeight },
-      "confirmed",
-    );
-  } catch {}
-  return { signature, publicKey: from.toString() };
 }

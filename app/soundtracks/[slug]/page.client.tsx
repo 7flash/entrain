@@ -6,19 +6,10 @@ import {
 import { signalMapForSession, formatSignalPoint } from "@/format/channel-map";
 import { createAudioEngine } from "@/client/audio-engine";
 import { sessionToPatternText } from "@/format/pattern-text";
-import {
-  connectAndVerify,
-  getWalletState,
-  refreshWalletBalance,
-  tokenLabel,
-  paySol,
-  type WalletState,
-} from "@/client/wallet";
 
 let slug = "";
 let session: EntrainSessionV1 | null = null;
 let engine = createAudioEngine(() => session!);
-let wallet: WalletState = { authenticated: false, publicKey: null, balance: 0 };
 let message = "Loading public soundtrack…";
 let busy = false;
 let exportMinutes = 30;
@@ -96,7 +87,7 @@ function LockedPlayerHint() {
         <strong>Loading local generator.</strong>
         <p className="small">
           Public/free mode is enabled. The exact ENTRAIN algorithm is available
-          without wallet authorization.
+          without login.
         </p>
         <p className="small">
           Audio is synthesized locally in this browser; the server only returns
@@ -171,10 +162,6 @@ function GroupListenCard({ locked }: { locked: boolean }) {
         let the host cue a shared countdown. Audio is still generated locally in
         each browser, so everyone must click Join once.
       </p>
-      <p className="small">
-        Room rewards: connected Phantom listeners earn internal tokens while the
-        room is playing. Anonymous listeners stay synced but do not earn.
-      </p>
       <div className="tagrow" style={{ marginBottom: "8px" }}>
         {room ? (
           <span className="pill mono">room {room.roomId}</span>
@@ -223,19 +210,6 @@ function GroupListenCard({ locked }: { locked: boolean }) {
         </div>
       ) : null}
       <div className="tagrow">
-        {!wallet.authenticated ? (
-          <button
-            className="btn"
-            disabled={syncBusy}
-            onClick={connectForRewards}
-          >
-            Connect for rewards
-          </button>
-        ) : (
-          <a className="btn" href="/account">
-            Rewards account
-          </a>
-        )}
         <button
           className="btn"
           disabled={syncBusy || locked}
@@ -346,148 +320,23 @@ function UnlockedSignalMap({ session }: { session: EntrainSessionV1 }) {
   );
 }
 
-async function connectForRewards() {
-  syncBusy = true;
-  syncMessage = "connecting wallet for room rewards…";
-  paint();
-  try {
-    wallet = await connectAndVerify();
-    syncMessage =
-      "Wallet connected. Keep this tab in the playing room to earn internal rewards.";
-    await heartbeatRoom();
-  } catch (e: any) {
-    syncMessage = e.message || "wallet connect failed";
-  }
-  syncBusy = false;
-  paint();
-}
-
-async function buyThenUnlock() {
+async function unlock() {
   busy = true;
-  message = "checking purchase requirements…";
+  message = "loading public soundtrack…";
   paint();
   try {
-    if (!wallet.authenticated) wallet = await connectAndVerify();
     const res = await fetch(
       `/api/access?slug=${encodeURIComponent(slug)}&action=play`,
     ).then((r) => r.json());
-    if (res.ok) {
-      session = sanitizeSession(res.template.session);
-      loadedTitle = res.template.title || session.name;
-      loadedScriptText =
-        res.template.scriptText || sessionToPatternText(session);
-      engine.stop();
-      engine = createAudioEngine(() => session!);
-      message = "already unlocked";
-      return;
-    }
-    if (res.code !== "payment_required")
-      throw new Error(res.error || "not purchasable");
-    await buyAccess(res);
-    await unlock();
-  } catch (e: any) {
-    message = e.message || "purchase failed";
-  } finally {
-    busy = false;
-    paint();
-  }
-}
-
-async function buyAccess(access: any) {
-  if (!wallet.authenticated) wallet = await connectAndVerify();
-  const purchase = await fetch(
-    `/api/market/purchase?slug=${encodeURIComponent(slug)}`,
-  ).then((r) => r.json());
-  if (!purchase.ok)
-    throw new Error(purchase.error || "could not create purchase intent");
-  const intent = purchase.purchase?.intent;
-  const price = Number(
-    intent?.expectedLamports ||
-      purchase.purchase?.priceLamports ||
-      access.priceLamports ||
-      0,
-  );
-  const basePrice = Number(
-    intent?.priceLamports ||
-      purchase.purchase?.priceLamports ||
-      access.priceLamports ||
-      0,
-  );
-  const recipient = String(
-    intent?.payoutWallet ||
-      purchase.purchase?.payoutWallet ||
-      access.payoutWallet ||
-      "",
-  );
-  if (!price || !recipient || !intent?.intentId)
-    throw new Error("Missing purchase intent. Start again.");
-  const sol = price / 1_000_000_000;
-  const baseSol = basePrice / 1_000_000_000;
-  if (
-    !confirm(
-      `Buy access for ${baseSol} SOL? Phantom will send ${sol} SOL including a tiny unique verification dust amount.`,
-    )
-  )
-    throw new Error("Purchase cancelled");
-  message = "open Phantom to send payment…";
-  paint();
-  const sent = await paySol(recipient, price, intent.memo);
-  message = "confirming on-chain payment…";
-  paint();
-  const confirmed = await fetch("/api/market/purchase", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      slug,
-      txSignature: sent.signature,
-      intentId: intent.intentId,
-    }),
-  }).then((r) => r.json());
-  if (!confirmed.ok)
-    throw new Error(confirmed.error || "payment confirmation failed");
-  message = "purchase confirmed; loading soundtrack…";
-  paint();
-}
-
-async function unlock() {
-  busy = true;
-  message = "checking access…";
-  paint();
-  try {
-    let res = await fetch(
-      `/api/access?slug=${encodeURIComponent(slug)}&action=play`,
-    ).then((r) => r.json());
-    if (!res.ok && res.requiresWallet) {
-      message = "connect Phantom and sign to unlock…";
-      paint();
-      wallet = await connectAndVerify();
-      res = await fetch(
-        `/api/access?slug=${encodeURIComponent(slug)}&action=play`,
-      ).then((r) => r.json());
-    }
-    if (!res.ok && res.staleBalance) {
-      message = "refreshing token balance…";
-      paint();
-      wallet = await refreshWalletBalance();
-      res = await fetch(
-        `/api/access?slug=${encodeURIComponent(slug)}&action=play`,
-      ).then((r) => r.json());
-    }
-    if (!res.ok && res.code === "payment_required") {
-      await buyAccess(res);
-      res = await fetch(
-        `/api/access?slug=${encodeURIComponent(slug)}&action=play`,
-      ).then((r) => r.json());
-    }
-    if (!res.ok) throw new Error(res.error || "locked");
+    if (!res.ok) throw new Error(res.error || "could not load soundtrack");
     session = sanitizeSession(res.template.session);
     loadedTitle = res.template.title || session.name;
     loadedScriptText = res.template.scriptText || sessionToPatternText(session);
     engine.stop();
     engine = createAudioEngine(() => session!);
-    message = `loaded free/public soundtrack. Loop mode: ${session.loop?.mode || "hold-last"}. You can play forever, export WAV, clone it, or join a group room.`;
+    message = `loaded public soundtrack. Loop mode: ${session.loop?.mode || "hold-last"}. You can play forever, export WAV, clone it, or join a group room.`;
   } catch (e: any) {
-    message = e.message || "unlock failed";
+    message = e.message || "load failed";
   } finally {
     busy = false;
     paint();
@@ -755,9 +604,7 @@ async function controlRoom(action: "start" | "pause" | "stop", delaySec = 0) {
 async function heartbeatRoom() {
   if (!roomId) return;
   try {
-    const label = wallet.publicKey
-      ? `${wallet.publicKey.slice(0, 4)}…${wallet.publicKey.slice(-4)}`
-      : clientId.slice(0, 6);
+    const label = clientId.slice(0, 6);
     const res = await fetch(
       `/api/sync/rooms/${encodeURIComponent(roomId)}/presence`,
       {
@@ -769,7 +616,7 @@ async function heartbeatRoom() {
           hostKey: roomHostKey,
           clientOffsetMs: Math.round(clockOffsetMs),
           rttMs: Math.round(clockRttMs),
-          earningActive: Boolean(syncFollowing && engine.running),
+          earningActive: false,
         }),
       },
     ).then((r) => r.json());
@@ -852,27 +699,34 @@ function cloneToEditor() {
 async function saveToLibrary() {
   if (!session) return;
   busy = true;
-  message = "saving private clone…";
+  message = "saving clone to your Google library…";
   paint();
   try {
-    let res = await fetch(
-      `/api/soundtracks/${encodeURIComponent(slug)}/clone`,
-      { method: "POST" },
-    ).then((r) => r.json());
-    if (!res.ok && /wallet/i.test(res.error || "")) {
-      wallet = await connectAndVerify();
-      res = await fetch(`/api/soundtracks/${encodeURIComponent(slug)}/clone`, {
-        method: "POST",
-      }).then((r) => r.json());
+    const res = await fetch("/api/sessions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: `${session.name} — clone`,
+        slug: "clone",
+        sourceSlug: slug,
+        session: sanitizeSession(session),
+        scriptFormat: "entrain-script.v1",
+        scriptText: loadedScriptText || sessionToPatternText(session),
+      }),
+    }).then((r) => r.json());
+    if (!res.ok && /(sign in|login|google|required)/i.test(res.error || "")) {
+      location.href = `/api/auth/google/start?next=${encodeURIComponent(location.pathname + location.search)}`;
+      return;
     }
     if (!res.ok) throw new Error(res.error || "save failed");
-    message = "saved private clone. Open it from your library.";
+    message = `saved clone · share link ${res.shareUrl || ""}`;
   } catch (e: any) {
     message = e.message || "save failed";
   }
   busy = false;
   paint();
 }
+
 function downloadBlob(blob: Blob, filename: string) {
   const a = document.createElement("a");
   const url = URL.createObjectURL(blob);
@@ -902,7 +756,6 @@ function resetPlayerState(nextSlug: string) {
   repetitions = 1;
   loadedTitle = "";
   loadedScriptText = "";
-  wallet = { authenticated: false, publicKey: null, balance: 0 };
   roomId = "";
   roomHostKey = "";
   room = null;
@@ -933,9 +786,6 @@ function draw() {
 export default async function mount() {
   const root = document.getElementById("soundtrack-player-root")!;
   resetPlayerState(root.dataset.slug || "");
-  wallet = await getWalletState().catch(
-    () => ({ authenticated: false, publicKey: null, balance: 0 }) as any,
-  );
   const params = new URLSearchParams(location.search);
   const initialRoom = (params.get("room") || "").toUpperCase();
   paint();

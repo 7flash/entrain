@@ -44,16 +44,8 @@ export default function SoundtrackDetailPage({ params }: Props) {
     <main>
       <section className="hero">
         <div className="tagrow">
-          <span className={template.minTokens ? "pill gate" : "pill unlocked"}>
-            {req}
-          </span>
-          <span className={`pill tier-${template.tier}`}>{template.tier}</span>
+          <span className="pill unlocked">{req}</span>
           <span className="pill">{template.category}</span>
-          {template.publishedByUser ? (
-            <span className="pill">
-              by {template.creatorName || "community creator"}
-            </span>
-          ) : null}
         </div>
         <h1>{template.title}</h1>
         <p>{template.summary}</p>

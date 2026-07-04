@@ -1,25 +1,32 @@
-export const TOKEN_TICKER = (process.env.TOKEN_TICKER || "WAVES")
-  .replace(/^\$/, "")
-  .toUpperCase();
-export const TOKEN_DISPLAY_NAME =
-  process.env.TOKEN_DISPLAY_NAME || `$${TOKEN_TICKER}`;
-export const TOKEN_CHAIN = process.env.TOKEN_CHAIN || "solana";
-export const TOKEN_MINT =
-  process.env.TOKEN_MINT ||
-  process.env.ENTRAIN_MINT ||
-  "3Ae5SuwRUsQPuJD8LJAPgpDtATCnpSndt3ikwKHQpump";
-export const ENTRAIN_MINT = TOKEN_MINT; // backward-compatible alias for older code/imports
-export const SOLANA_RPC =
-  process.env.SOLANA_RPC || "https://api.mainnet-beta.solana.com";
 export const SESSION_COOKIE = process.env.SESSION_COOKIE || "entrain_session";
-export const ALLOW_DEV_UNLOCK = process.env.ALLOW_DEV_UNLOCK === "1";
 export const COOKIE_SECURE = process.env.NODE_ENV === "production";
-
 export const ADMIN_TOKEN = process.env.ADMIN_TOKEN || "";
+export const PUBLIC_ORIGIN =
+  process.env.PUBLIC_ORIGIN || "http://localhost:3000";
+
+// Google OAuth replaces the old Phantom/token-gate flow.
+export const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || "";
+export const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
+export const GOOGLE_REDIRECT_URI =
+  process.env.GOOGLE_REDIRECT_URI ||
+  `${PUBLIC_ORIGIN.replace(/\/$/, "")}/api/auth/google/callback`;
+export const GOOGLE_OAUTH_STATE_COOKIE =
+  process.env.GOOGLE_OAUTH_STATE_COOKIE || "entrain_google_state";
+export const MAX_SHARED_TRACKS_PER_USER = Number(
+  process.env.MAX_SHARED_TRACKS_PER_USER || 50,
+);
+
+// Kept as an explicit mode flag so old token/payment routes can fail closed with a clear message.
+export const PUBLIC_FREE_MODE = true;
 
 export function tokenAmountLabel(amount: number | string) {
-  return `${amount} ${TOKEN_DISPLAY_NAME}`;
+  return String(amount);
 }
 
-// Temporary product mode: all catalogue rows are public/free and wallet/payment UI is hidden unless explicitly disabled.
-export const PUBLIC_FREE_MODE = process.env.PUBLIC_FREE_MODE !== "0";
+// Legacy compatibility exports for old audit/token modules. They are not product features now.
+export const TOKEN_TICKER = "";
+export const TOKEN_DISPLAY_NAME = "";
+export const TOKEN_CHAIN = "none";
+export const TOKEN_MINT = "";
+export const ENTRAIN_MINT = "";
+export const SOLANA_RPC = "";

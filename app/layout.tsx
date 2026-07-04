@@ -20,7 +20,7 @@ export default function RootLayout({ children }: { children: any }) {
               <a href="/soundtracks">Soundtracks</a>
               <a href="/rooms">Rooms</a>
               <a href="/studio">Create</a>
-              <a href="/library">Library</a>
+              <a href="/library">Saved</a>
               <a href="/account">Account</a>
               <a href="/admin">Admin</a>
             </div>

@@ -9,9 +9,9 @@ export default function SoundtracksPage() {
         <h1>Ready brainwave soundtracks</h1>
         <p>
           Every published soundtrack is available to play, export, inspect, and
-          clone without wallet login. Each card is a database row containing
-          ENTRAIN-format JSON: layers, timelines, ambience metadata, name,
-          description, category, and tags.
+          clone without login. Each card is a database row containing source
+          script plus compiled ENTRAIN runtime cache: layers, timelines,
+          ambience metadata, name, description, category, and tags.
         </p>
       </section>
       <section className="toolbar">

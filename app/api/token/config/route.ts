@@ -1,6 +1,9 @@
-import { tokenConfig } from "@/lib/token-market";
 import { json } from "@/lib/http";
-
 export function GET() {
-  return json({ ok: true, ...tokenConfig() });
+  return json({
+    ok: true,
+    payments: false,
+    message:
+      "Token gates are disabled. ENTRAIN uses Google accounts for saved share links.",
+  });
 }

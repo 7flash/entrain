@@ -7,8 +7,10 @@ export async function POST(req: Request) {
     return json(
       {
         ok: true,
+        userId: result.userId,
+        email: result.email,
         publicKey: result.publicKey,
-        balance: result.balance,
+        balance: 0,
         expiresAt: result.expiresAt,
       },
       {
@@ -19,7 +21,7 @@ export async function POST(req: Request) {
     );
   } catch (e: any) {
     return json(
-      { ok: false, error: e.message || "refresh failed" },
+      { ok: false, error: e.message || "Google session required" },
       { status: 401 },
     );
   }

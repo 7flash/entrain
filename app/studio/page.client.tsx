@@ -276,11 +276,10 @@ function App() {
             <div className="eyebrow">No-login studio</div>
             <p className="small">
               Play, edit, render WAV, import/export, and share anonymously
-              without connecting a wallet. Phantom is optional and only used to
-              save a private cloud copy to your wallet library. The shared URL
-              stores the source script after <span className="mono">#</span>, so
-              it is not sent to the server. The compiled JSON remains only an
-              advanced runtime cache.
+              without login. Google sign-in is only used to save up to 50
+              cloud/share links. The shared URL stores the source script after{" "}
+              <span className="mono">#</span>, so it is not sent to the server.
+              The compiled JSON remains only an advanced runtime cache.
             </p>
             <div className="studio-file-actions local-first-actions">
               <button className="act primary" onClick={copyShareUrl}>
@@ -290,7 +289,7 @@ function App() {
                 Copy source capsule
               </button>
               <button className="act" onClick={saveServer}>
-                Save to wallet library
+                Save/share with Google
               </button>
               <button className="act" onClick={importShareString}>
                 Import URL/code
@@ -367,13 +366,13 @@ function App() {
           <div className="studio-share-box">
             <div className="eyebrow">Publishing mode</div>
             <p className="small">
-              Public community publishing and paid sales are paused. Save
-              privately with Phantom, share by exact # URL, or send an admin
-              draft for curated catalogue publishing.
+              Public community publishing and paid sales are disabled. Save to
+              your Google library for a /shared link, share by exact # URL, or
+              send an admin draft for curated catalogue publishing.
             </p>
             <div className="studio-file-actions">
               <button className="act" onClick={saveServer}>
-                Save to wallet library
+                Save/share with Google
               </button>
               <button className="act" onClick={sendAdminDraft}>
                 Admin draft
@@ -887,7 +886,7 @@ function coachPlan(analysis: ReturnType<typeof analyzeSession>) {
       title: "Start from one steady tone.",
       body: "Build the track like an operator: verify the playback device first, then add pulse modulation, then create a timeline arc.",
       micro:
-        "No wallet required for creation; Phantom is optional for private library saves.",
+        "No login required for creation; Google is optional for saved share links.",
       actions: [
         {
           label: "Carrier check",
@@ -2857,51 +2856,8 @@ function clearAutosave() {
 }
 
 async function publishCurrent() {
-  try {
-    const title =
-      prompt("Public soundtrack title", session.name) || session.name;
-    const summary =
-      prompt(
-        "Short catalogue summary",
-        session.description ||
-          session.notes ||
-          "Community-created ENTRAIN soundtrack.",
-      ) || "Community-created ENTRAIN soundtrack.";
-    const priceSolRaw =
-      prompt("Price in SOL for paid access. Use 0 for free.", "0.05") || "0";
-    const priceLamports = Math.max(
-      0,
-      Math.floor(Number(priceSolRaw) * 1_000_000_000),
-    );
-    const creatorName = prompt("Creator display name", "") || "";
-    notice = "connect Phantom to publish…";
-    repaint();
-    await connectAndVerify();
-    const res = await fetch("/api/soundtracks/publish", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        title,
-        summary,
-        description: session.description || session.notes || summary,
-        category: "community",
-        tags: ["community", "creator"],
-        session: sanitizeSession(session),
-        priceLamports,
-        creatorName,
-        payoutWallet: undefined,
-        publishNow: true,
-      }),
-    }).then((r) => r.json());
-    if (!res.ok) throw new Error(res.error || "publish failed");
-    notice = res.published
-      ? `published to catalogue: /soundtracks/${res.slug}`
-      : `submitted for review: ${res.slug}`;
-    if (res.published && confirm("Open public soundtrack page now?"))
-      location.href = `/soundtracks/${res.slug}`;
-  } catch (e: any) {
-    notice = e.message || "publish failed";
-  }
+  notice =
+    "Public publishing is disabled. Use Save/share with Google for a /shared link, or send an admin draft for curated catalogue rows.";
   repaint();
 }
 
@@ -2926,24 +2882,14 @@ async function saveServer() {
         scriptText: sessionToPatternText(session),
       }),
     }).then((r) => r.json());
-    if (!res.ok && /wallet/i.test(res.error || "")) {
-      notice = "connect Phantom to save to your private library…";
+    if (!res.ok && /(sign in|login|google|required)/i.test(res.error || "")) {
+      notice = "sign in with Google to save/share…";
       repaint();
       await connectAndVerify();
-      res = await fetch("/api/sessions", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          name: session.name,
-          slug: "custom",
-          session: sanitizeSession(session),
-          scriptFormat: "entrain-script.v1",
-          scriptText: sessionToPatternText(session),
-        }),
-      }).then((r) => r.json());
+      return;
     }
     notice = res.ok
-      ? "saved to private wallet library"
+      ? `saved · share link ${res.shareUrl || ""}`
       : res.error || "save failed";
   } catch (e: any) {
     notice = e.message || "save failed";

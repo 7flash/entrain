@@ -5,7 +5,6 @@ import { authFromRequest, decideLibraryAccess } from "@/lib/access-policy";
 import { json, readJson } from "@/lib/http";
 
 type Props = { params: { id: string } };
-
 type Body = {
   name?: string;
   description?: string;
@@ -14,13 +13,13 @@ type Body = {
   scriptFormat?: string;
   scriptText?: string;
   isFavorite?: boolean;
+  isShared?: boolean;
   lastPlayedAt?: number;
 };
-
-function owned(id: string, publicKey: string) {
+function owned(id: string, userId: string) {
   return db.savedSessions
     .select()
-    .where({ id: Number(id), publicKey })
+    .where({ id: Number(id), publicKey: userId })
     .first() as any;
 }
 
@@ -48,13 +47,13 @@ export async function PATCH(req: Request, { params }: Props) {
       patch.scriptFormat = String(body.scriptFormat);
   }
   if (typeof body.isFavorite === "boolean") patch.isFavorite = body.isFavorite;
+  if (typeof body.isShared === "boolean") patch.isShared = body.isShared;
   if (body.lastPlayedAt) patch.lastPlayedAt = Number(body.lastPlayedAt);
   db.savedSessions
     .update(patch)
     .where({ id: Number(params.id), publicKey: auth.publicKey })
     .run();
-  const updated = owned(params.id, auth.publicKey);
-  return json({ ok: true, saved: updated });
+  return json({ ok: true, saved: owned(params.id, auth.publicKey) });
 }
 
 export async function DELETE(req: Request, { params }: Props) {

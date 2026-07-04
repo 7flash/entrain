@@ -3,13 +3,15 @@ import { sessionToPatternText } from "@/format/pattern-text";
 import {
   connectAndVerify,
   getWalletState,
-  tokenLabel,
+  signOut,
   type WalletState,
 } from "@/client/wallet";
 
 let state: WalletState = { authenticated: false, publicKey: null, balance: 0 };
 let sessions: any[] = [];
 let message = "";
+let limit = 50;
+let remaining = 50;
 let busyId: number | null = null;
 
 function App() {
@@ -19,19 +21,26 @@ function App() {
         <div>
           <strong>
             {state.authenticated
-              ? `Wallet ${state.publicKey?.slice(0, 4)}…${state.publicKey?.slice(-4)}`
-              : "Connect wallet"}
+              ? state.email || state.name || "Google account"
+              : "Sign in to save tracks"}
           </strong>
           <div className="small">
             {message ||
               (state.authenticated
-                ? `${sessions.length} saved tracks · ${tokenLabel(state.balance)}`
-                : "Wallet session required to list saved tracks.")}
+                ? `${sessions.length}/${limit} saved share links · ${remaining} remaining`
+                : "Studio works without login. Google sign-in lets you save up to 50 shareable tracks.")}
           </div>
         </div>
-        <button className="btn primary" onClick={connect}>
-          {state.authenticated ? "Reconnect" : "Connect Phantom"}
-        </button>
+        <div className="tagrow">
+          {state.authenticated ? (
+            <button className="btn" onClick={logout}>
+              Sign out
+            </button>
+          ) : null}
+          <button className="btn primary" onClick={connect}>
+            {state.authenticated ? "Refresh account" : "Sign in with Google"}
+          </button>
+        </div>
       </div>
       <div className="list">
         {sessions.map((s) => (
@@ -47,6 +56,10 @@ function App() {
                   {s.scriptFormat || "entrain-script.v1"} ·{" "}
                   {new Date(s.createdAt).toLocaleString()}
                 </div>
+                <div className="small">
+                  Share link: <span className="mono">/shared/{s.shareId}</span>{" "}
+                  · {s.isShared ? "enabled" : "disabled"}
+                </div>
                 {s.description ? (
                   <p className="muted">{s.description}</p>
                 ) : null}
@@ -54,6 +67,9 @@ function App() {
               <div className="tagrow">
                 <button className="btn" onClick={() => openSession(s)}>
                   Open in editor
+                </button>
+                <button className="btn" onClick={() => copyShare(s)}>
+                  Copy share link
                 </button>
                 <button className="btn" onClick={() => copySource(s)}>
                   Copy source
@@ -64,6 +80,13 @@ function App() {
                   onClick={() => toggleFavorite(s)}
                 >
                   {s.isFavorite ? "Unfavorite" : "Favorite"}
+                </button>
+                <button
+                  className="btn"
+                  disabled={busyId === s.id}
+                  onClick={() => toggleShared(s)}
+                >
+                  {s.isShared ? "Disable link" : "Enable link"}
                 </button>
                 <button
                   className="btn danger"
@@ -84,9 +107,16 @@ function App() {
         ))}
         {state.authenticated && !sessions.length ? (
           <p className="muted">
-            No saved tracks yet. Save from the studio or clone an unlocked
-            soundtrack.
+            No saved tracks yet. Save from Studio or open a shared link and
+            clone it.
           </p>
+        ) : null}
+        {!state.authenticated ? (
+          <div className="notice">
+            <strong>No login needed for creation.</strong> Use Studio and
+            private <span className="mono">#</span> links without an account.
+            Google is only for your 50 saved cloud/share links.
+          </div>
         ) : null}
       </div>
     </div>
@@ -94,12 +124,14 @@ function App() {
 }
 async function connect() {
   try {
-    state = await connectAndVerify();
-    await load();
+    await connectAndVerify();
   } catch (e: any) {
-    message = e.message || "connect failed";
+    message = e.message || "sign-in started";
     paint();
   }
+}
+async function logout() {
+  await signOut();
 }
 async function load() {
   const r = await fetch("/api/sessions")
@@ -110,6 +142,8 @@ async function load() {
     sessions = [];
   } else {
     sessions = r.sessions || [];
+    limit = r.limit || 50;
+    remaining = r.remaining ?? Math.max(0, limit - sessions.length);
     message = "";
   }
   paint();
@@ -129,6 +163,12 @@ async function copySource(s: any) {
   message = "source script copied";
   paint();
 }
+async function copyShare(s: any) {
+  const url = new URL(`/shared/${s.shareId}`, location.origin).toString();
+  await navigator.clipboard.writeText(url).catch(() => {});
+  message = "share link copied";
+  paint();
+}
 async function toggleFavorite(s: any) {
   busyId = s.id;
   paint();
@@ -140,6 +180,20 @@ async function toggleFavorite(s: any) {
     .then((x) => x.json())
     .catch(() => ({ ok: false, error: "update failed" }));
   message = r.ok ? "updated favorite" : r.error || "update failed";
+  busyId = null;
+  await load();
+}
+async function toggleShared(s: any) {
+  busyId = s.id;
+  paint();
+  const r = await fetch(`/api/sessions/${s.id}`, {
+    method: "PATCH",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ isShared: !s.isShared }),
+  })
+    .then((x) => x.json())
+    .catch(() => ({ ok: false, error: "update failed" }));
+  message = r.ok ? "updated share link" : r.error || "update failed";
   busyId = null;
   await load();
 }

@@ -16,7 +16,7 @@ export async function POST(req: Request, { params }: Props) {
   const lib = decideLibraryAccess(auth, "save");
   if (!lib.ok || !auth)
     return json(
-      { ok: false, error: lib.message, requiresWallet: true },
+      { ok: false, error: lib.message, requiresLogin: true },
       { status: 401 },
     );
   const soundtrack = findSoundtrack(params.slug);

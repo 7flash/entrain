@@ -4,11 +4,6 @@ import {
   type EntrainSessionV1,
 } from "@/format/entrain-format";
 import { createAudioEngine } from "@/client/audio-engine";
-import {
-  connectAndVerify,
-  getWalletState,
-  type WalletState,
-} from "@/client/wallet";
 
 let roomId = "";
 let slug = "";
@@ -16,7 +11,6 @@ let hostKey = "";
 let room: any = null;
 let session: EntrainSessionV1 | null = null;
 let engine = createAudioEngine(() => session!);
-let wallet: WalletState = { authenticated: false, publicKey: null, balance: 0 };
 let message = "Loading synced meditation room…";
 let syncMessage = "Join the room to sync playback.";
 let busy = false;
@@ -30,11 +24,6 @@ let lastDriftSec = 0;
 const clientId = getClientId();
 
 function App() {
-  const reward = room?.reward || {
-    tokenLabel: "$WAVES",
-    tokensPerMinute: 1,
-    tickSec: 10,
-  };
   const me = room?.participants?.find((p: any) => p.clientId === clientId);
   const isHost = !!hostKey;
   const cueing = room?.state === "playing" && roomOffsetSigned(room) < -0.05;
@@ -51,11 +40,6 @@ function App() {
             {cueing ? "countdown" : room?.state || "loading"}
           </span>
           {following ? <span className="pill unlocked">following</span> : null}
-          {wallet.authenticated ? (
-            <span className="pill unlocked">earning-ready</span>
-          ) : (
-            <span className="pill">anonymous</span>
-          )}
         </div>
       </div>
 
@@ -84,14 +68,6 @@ function App() {
             <b>{following ? `${lastDriftSec.toFixed(2)}s` : "—"}</b>
             <em>drift</em>
           </span>
-          <span>
-            <b>
-              {me?.rewardTotalMicro
-                ? (me.rewardTotalMicro / 1_000_000).toFixed(3)
-                : "0"}
-            </b>
-            <em>{reward.tokenLabel}</em>
-          </span>
         </div>
       </div>
 
@@ -114,11 +90,6 @@ function App() {
         >
           {engine.running ? "Stop local audio" : "Preview unsynced"}
         </button>
-        <button className="btn" onClick={connectWallet} disabled={busy}>
-          {wallet.authenticated
-            ? "Reconnect Phantom"
-            : "Connect Phantom for rewards"}
-        </button>
         <button className="btn" onClick={copyLink} disabled={!room}>
           Copy room link
         </button>
@@ -127,9 +98,6 @@ function App() {
           onClick={() => navigate(`/soundtracks/${encodeURIComponent(slug)}`)}
         >
           Soundtrack page
-        </button>
-        <button className="btn" onClick={() => navigate("/account")}>
-          Account
         </button>
       </div>
 
@@ -192,13 +160,9 @@ function Participants() {
                 {p.isHost ? "★ " : ""}
                 {p.label || "listener"}
               </strong>
-              <span>
-                {p.publicKey ? "Phantom connected" : "anonymous synced"}
-              </span>
+              <span>synced listener</span>
               <em>
-                {p.rewardTotalMicro
-                  ? `${(p.rewardTotalMicro / 1_000_000).toFixed(4)} earned in this room`
-                  : "no room rewards yet"}
+                {p.clientId === clientId ? "this browser" : "active heartbeat"}
               </em>
             </div>
           ))}
@@ -211,7 +175,6 @@ function Participants() {
 }
 
 async function boot() {
-  wallet = await getWalletState().catch(() => wallet);
   hostKey =
     new URLSearchParams(location.search).get("host") ||
     localStorage.getItem(`entrain:room-host:${roomId}`) ||
@@ -242,21 +205,6 @@ async function loadSession() {
   session = sanitizeSession(res.template.session);
   engine.stop();
   engine = createAudioEngine(() => session!);
-}
-async function connectWallet() {
-  busy = true;
-  syncMessage = "connecting Phantom…";
-  paint();
-  try {
-    wallet = await connectAndVerify();
-    syncMessage =
-      "Phantom connected. Join synced listening and keep this tab active to earn.";
-    await heartbeat();
-  } catch (e: any) {
-    syncMessage = e.message || "wallet connect failed";
-  }
-  busy = false;
-  paint();
 }
 async function joinRoom() {
   if (!session) return;
@@ -340,9 +288,7 @@ function startPoll() {
 async function heartbeat() {
   if (!roomId) return;
   try {
-    const label = wallet.publicKey
-      ? `${wallet.publicKey.slice(0, 4)}…${wallet.publicKey.slice(-4)}`
-      : `anon-${clientId.slice(0, 4)}`;
+    const label = `listener-${clientId.slice(0, 4)}`;
     const res = await fetch(
       `/api/sync/rooms/${encodeURIComponent(roomId)}/presence`,
       {
@@ -354,7 +300,7 @@ async function heartbeat() {
           hostKey,
           clientOffsetMs: Math.round(clockOffsetMs),
           rttMs: Math.round(clockRttMs),
-          earningActive: Boolean(following && engine.running),
+          earningActive: false,
         }),
       },
     ).then((r) => r.json());

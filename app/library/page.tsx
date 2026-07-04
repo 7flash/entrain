@@ -2,11 +2,11 @@ export default function LibraryPage() {
   return (
     <main>
       <section className="hero" style={{ paddingBottom: "14px" }}>
-        <h1>Private library</h1>
+        <h1>Your saved tracks</h1>
         <p>
-          Your saved tracks are attached to your verified Phantom wallet. Rows
-          store ENTRAIN JSON only; ambience file buffers stay local and must be
-          reloaded when a saved track uses a sample layer.
+          Sign in with Google to save up to 50 algorithmic tracks and share each
+          one with a simple link. Studio and private # links still work without
+          login.
         </p>
       </section>
       <section className="console" id="library-root">

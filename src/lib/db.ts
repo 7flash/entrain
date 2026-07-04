@@ -52,6 +52,24 @@ export const db = new Database(
       purchaseCount: z.number().default(0),
       ...timestamps,
     }),
+    users: z.object({
+      userId: z.string(),
+      googleSub: z.string(),
+      email: z.string(),
+      name: z.string().optional(),
+      picture: z.string().optional(),
+      lastLoginAt: z.number().optional(),
+      ...timestamps,
+    }),
+    userSessions: z.object({
+      sessionId: z.string(),
+      userId: z.string(),
+      email: z.string(),
+      expiresAt: z.number(),
+      ...timestamps,
+    }),
+
+    // Legacy wallet/payment tables are retained only so older local DBs keep migrating.
     walletChallenges: z.object({
       publicKey: z.string(),
       nonce: z.string(),
@@ -101,7 +119,9 @@ export const db = new Database(
       ...timestamps,
     }),
     savedSessions: z.object({
-      publicKey: z.string(),
+      publicKey: z.string(), // legacy name; now stores userId for Google accounts
+      userId: z.string().optional(),
+      ownerEmail: z.string().optional(),
       slug: z.string(),
       sourceSlug: z.string().optional(),
       name: z.string(),
@@ -110,6 +130,9 @@ export const db = new Database(
       session: z.any(),
       scriptFormat: z.string().default("entrain-script.v1"),
       scriptText: z.string().default(""),
+      shareId: z.string().optional(),
+      isShared: z.boolean().default(true),
+      shareCreatedAt: z.number().optional(),
       isFavorite: z.boolean().default(false),
       lastPlayedAt: z.number().optional(),
       ...timestamps,
@@ -236,6 +259,9 @@ export function sweepExpiredRows(now = Date.now()) {
     for (const row of db.walletChallenges.select().all() as any[])
       if (Number(row.expiresAt || 0) < now - 60_000)
         db.walletChallenges.delete().where({ nonce: row.nonce }).run();
+    for (const row of db.userSessions.select().all() as any[])
+      if (Number(row.expiresAt || 0) < now)
+        db.userSessions.delete().where({ sessionId: row.sessionId }).run();
     for (const row of db.walletSessions.select().all() as any[])
       if (Number(row.expiresAt || 0) < now)
         db.walletSessions.delete().where({ sessionId: row.sessionId }).run();

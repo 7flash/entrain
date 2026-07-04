@@ -7,15 +7,16 @@ export default function HomePage() {
       <section className="hero">
         <span className="pill unlocked">
           ENTRAIN format · browser player · public catalogue · local-first
-          studio · optional wallet library
+          studio · Google saves
         </span>
         <h1>Create your own tracks, or play ready brainwave soundtracks.</h1>
         <p>
-          Every track is stored as ENTRAIN JSON: layers, beat timelines, carrier
-          glides, ambience-loop metadata, pan motion, name, and description. The
-          browser player runs that format live, renders WAVs locally, and clones
-          any soundtrack into the editor without wallet login. Phantom is
-          optional only for saving private tracks to your wallet library.
+          Every track is stored as a source script plus compiled ENTRAIN runtime
+          cache: layers, beat timelines, carrier glides, ambience-loop metadata,
+          pan motion, name, and description. The browser player runs that format
+          live, renders WAVs locally, and clones any soundtrack into the editor
+          without login. Google is optional only for saving up to 50 private
+          share links.
         </p>
         <p>
           <a className="btn primary" href="/studio">
@@ -33,15 +34,16 @@ export default function HomePage() {
           <p className="muted">
             Build a track from scratch, play it, import/export JSON, share it
             privately by URL hash, and render a WAV locally. Creation and exact
-            # sharing need no login. Connect Phantom only when you want to save
-            a private cloud copy to your wallet library.
+            # sharing need no login. Sign in with Google only when you want to
+            save a cloud copy and get a /shared link. Each account can save up
+            to 50 tracks.
           </p>
           <p>
             <a className="btn primary" href="/studio?new=1">
               Open editor
             </a>{" "}
             <a className="btn" href="/library">
-              Private library
+              Saved tracks
             </a>
           </p>
         </article>
@@ -50,8 +52,8 @@ export default function HomePage() {
           <p className="muted">
             Published rows in the database appear as ready soundtracks. The
             public catalogue is reserved for prepared/admin-curated soundtracks.
-            Community publishing is paused; creators share by # link or save
-            privately.
+            Community publishing is paused; users share by # link or save/share
+            privately with Google.
           </p>
           <p>
             <a className="btn" href="/soundtracks">

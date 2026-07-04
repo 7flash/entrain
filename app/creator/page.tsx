@@ -2,27 +2,24 @@ export default function CreatorPage() {
   return (
     <main>
       <section className="hero">
-        <span className="pill unlocked">Wallet workspace</span>
-        <h1>Creator account</h1>
+        <span className="pill unlocked">Account workspace</span>
+        <h1>Account</h1>
         <p>
-          Connect Phantom to manage your profile and wallet-saved tracks. Public
-          community publishing and paid sales are paused for now: share tracks
-          privately with exact # links, or save them to your own wallet library.
+          Creator publishing and payments are disabled. Use Studio to build
+          tracks, Google sign-in to save up to 50 shareable tracks, and private
+          # links for anonymous sharing.
         </p>
         <div className="tagrow">
           <a className="btn primary" href="/studio">
             Open Studio
           </a>
           <a className="btn" href="/library">
-            Private library
+            Saved tracks
           </a>
-          <a className="btn" href="/soundtracks">
-            Prepared catalogue
+          <a className="btn" href="/account">
+            Account
           </a>
         </div>
-      </section>
-      <section className="card" id="creator-root">
-        <p className="muted">Loading creator dashboard…</p>
       </section>
     </main>
   );

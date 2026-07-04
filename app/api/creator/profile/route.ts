@@ -1,58 +1,33 @@
-import { db } from "@/lib/db";
 import { authFromRequest } from "@/lib/access-policy";
-import { json, readJson } from "@/lib/http";
-import { upsertCreatorProfile } from "@/lib/marketplace";
-
-type Body = { displayName?: string; bio?: string; payoutWallet?: string };
-
+import { db } from "@/lib/db";
+import { json } from "@/lib/http";
+import { MAX_SHARED_TRACKS_PER_USER } from "@/lib/config";
 export function GET(req: Request) {
   const auth = authFromRequest(req);
   if (!auth)
-    return json(
-      {
-        ok: false,
-        error: "Connect Phantom to view creator profile.",
-        requiresWallet: true,
-      },
-      { status: 401 },
-    );
-  const profile = db.creatorProfiles
+    return json({ ok: false, error: "Sign in with Google." }, { status: 401 });
+  const tracks = db.savedSessions
     .select()
     .where({ publicKey: auth.publicKey })
-    .first();
-  const soundtracks = db.templates
-    .select()
-    .where({ ownerPublicKey: auth.publicKey })
     .orderBy("createdAt", "DESC")
-    .limit(100)
+    .limit(MAX_SHARED_TRACKS_PER_USER)
     .all();
   return json({
     ok: true,
-    profile,
-    soundtracks,
+    profile: { email: auth.email, name: auth.name, picture: auth.picture },
+    tracks,
     publishingEnabled: false,
     message:
-      "Public publishing is disabled for now. Use private # share links or save to your wallet library.",
+      "Public publishing and payments are disabled. Use saved share links.",
   });
 }
-
-export async function POST(req: Request) {
-  const auth = authFromRequest(req);
-  if (!auth)
-    return json(
-      {
-        ok: false,
-        error: "Connect Phantom to update creator profile.",
-        requiresWallet: true,
-      },
-      { status: 401 },
-    );
-  const body = await readJson<Body>(req);
-  const profile = upsertCreatorProfile(
-    auth.publicKey,
-    body?.displayName,
-    body?.payoutWallet,
-    body?.bio,
+export function POST() {
+  return json(
+    {
+      ok: false,
+      error:
+        "Creator profiles are disabled while marketplace publishing is paused.",
+    },
+    { status: 410 },
   );
-  return json({ ok: true, profile });
 }

@@ -1,11 +1,6 @@
 import { db } from "./db";
 import { findSoundtrack } from "./soundtracks";
 import { dbMeasure } from "./measure";
-import {
-  awardRoomListening,
-  rewardConfig,
-  formatRewardAmount,
-} from "./rewards";
 
 const ROOM_TTL_MS = 24 * 60 * 60_000;
 const PRESENCE_TTL_MS = 35_000;
@@ -21,7 +16,6 @@ export type SyncRoomParticipant = {
   lastSeenAt: number;
   clientOffsetMs?: number;
   rttMs?: number;
-  rewardTotalMicro?: number;
 };
 
 export type SyncRoomPublic = {
@@ -38,7 +32,6 @@ export type SyncRoomPublic = {
   hostPresent: boolean;
   participantCount: number;
   participants: SyncRoomParticipant[];
-  reward?: ReturnType<typeof rewardConfig>;
 };
 
 export function createSyncRoom(slug: string, createdBy?: string) {
@@ -141,22 +134,6 @@ export function heartbeatSyncRoom(
       .where({ roomId: row.roomId, clientId })
       .first() as any;
     const joinedAt = existing?.joinedAt || now;
-    let rewardPatch: any = {};
-    if (body.publicKey && body.earningActive) {
-      const reward = awardRoomListening(
-        String(body.publicKey),
-        row,
-        { ...existing, joinedAt },
-        now,
-      );
-      if (reward.amountMicro > 0) {
-        rewardPatch.rewardCursorAt = reward.cursorAt;
-        rewardPatch.rewardTotalMicro =
-          Number(existing?.rewardTotalMicro || 0) + reward.amountMicro;
-      } else if (!existing?.rewardCursorAt) {
-        rewardPatch.rewardCursorAt = now;
-      }
-    }
     const patch = {
       roomId: row.roomId,
       clientId,
@@ -171,7 +148,6 @@ export function heartbeatSyncRoom(
         : undefined,
       joinedAt,
       lastSeenAt: now,
-      ...rewardPatch,
     };
     if (existing)
       db.syncRoomPresence
@@ -215,7 +191,6 @@ export function toPublic(row: any): SyncRoomPublic {
     hostPresent: participants.some((p) => p.isHost),
     participantCount: participants.length,
     participants,
-    reward: rewardConfig(),
   };
 }
 
@@ -238,7 +213,6 @@ function participantsForRoom(
       clientOffsetMs:
         r.clientOffsetMs === undefined ? undefined : Number(r.clientOffsetMs),
       rttMs: r.rttMs === undefined ? undefined : Number(r.rttMs),
-      rewardTotalMicro: Number(r.rewardTotalMicro || 0),
     }));
 }
 
@@ -270,10 +244,6 @@ export function listSyncRooms() {
     .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
     .slice(0, 100)
     .map((row) => toPublic(row));
-}
-
-export function rewardLabelForMicro(micro?: number) {
-  return formatRewardAmount(Number(micro || 0));
 }
 
 function makeRoomId() {

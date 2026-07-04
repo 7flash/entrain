@@ -1,33 +1,20 @@
-import { allSoundtracks } from "@/lib/soundtracks";
 import { getAuthSession } from "@/lib/auth";
 import { cookieValue, json } from "@/lib/http";
-import { tokenConfig } from "@/lib/token-market";
 
 export function GET(req: Request) {
-  const wallet = getAuthSession(cookieValue(req));
-  const soundtracks = allSoundtracks().map((s) => ({
-    slug: s.slug,
-    minTokens: 0,
-    tier: "free",
-    unlocked: true,
-  }));
+  const user = getAuthSession(cookieValue(req));
   return json({
     ok: true,
-    publicFreeMode: true,
-    token: tokenConfig(),
-    wallet: wallet
+    user: user
       ? {
           authenticated: true,
-          publicKey: wallet.publicKey,
-          balance: wallet.balance,
-          expiresAt: wallet.expiresAt,
-          balanceRefreshedAt: wallet.lastRefreshedAt,
+          userId: user.userId,
+          email: user.email,
+          name: user.name,
+          picture: user.picture,
+          expiresAt: user.expiresAt,
         }
       : null,
-    entitlements: {
-      canSavePrivate: !!wallet,
-      balance: wallet?.balance || 0,
-      soundtracks,
-    },
+    entitlements: { canSavePrivate: !!user, catalogueUnlocked: true },
   });
 }

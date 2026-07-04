@@ -26,9 +26,5 @@ export function GET(req: Request) {
       createdAt: Date.now(),
     });
   } catch {}
-  return accessJson(decision, {
-    template: soundtrack,
-    soundtrack,
-    wallet: auth,
-  });
+  return accessJson(decision, { template: soundtrack, soundtrack, user: auth });
 }
