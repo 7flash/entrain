@@ -35,6 +35,83 @@ type BuildOptions = {
   delaySec?: number;
 };
 
+// ─── exact beat-phase integral ───────────────────────────────────────────────
+// The visual sweep jumps on integer crossings of ∫ beat(t) dt (see
+// beat-scope.ts beatCycles). Pulse-per-pulse types (iso-trap) must step on
+// the SAME crossings — naive nextT += 1/b(t) is first-order Euler and drifts
+// by (slope/2)·∫dt/b over a glide (~0.6 cycles across a 24-min 10→3 Hz
+// descent, i.e. pulses lead the line by ~200 ms at the end). These helpers
+// solve the piecewise-linear integral exactly.
+
+type BeatSeg = { t0: number; t1: number; b0: number; b1: number }; // sec, Hz
+
+function beatSegments(l: EntrainLayerV1): { segs: BeatSeg[]; holdB: number } {
+  const pts = sortedKeyframes(l.keyframes);
+  const segs: BeatSeg[] = [];
+  const bAt = (tMin: number) =>
+    Math.max(0, sampleTimeline(l.keyframes, "beatHz", tMin));
+  for (let i = 0; i + 1 < pts.length; i++) {
+    segs.push({
+      t0: pts[i].tMin * 60,
+      t1: pts[i + 1].tMin * 60,
+      b0: bAt(pts[i].tMin),
+      b1: bAt(pts[i + 1].tMin),
+    });
+  }
+  const holdB = pts.length ? bAt(pts[pts.length - 1].tMin) : 0;
+  return { segs, holdB };
+}
+
+// Cycles accumulated from pattern time 0 to tSec.
+function beatCyclesUpTo(segs: BeatSeg[], holdB: number, tSec: number) {
+  let cyc = 0;
+  let end = 0;
+  for (const seg of segs) {
+    end = seg.t1;
+    const span = Math.max(0, Math.min(tSec, seg.t1) - seg.t0);
+    if (span <= 0) continue;
+    const s = (seg.b1 - seg.b0) / Math.max(1e-9, seg.t1 - seg.t0);
+    cyc += seg.b0 * span + (s * span * span) / 2;
+    if (tSec <= seg.t1) return cyc;
+  }
+  return cyc + Math.max(0, tSec - end) * holdB;
+}
+
+// Pattern time of the next point where the integral advances by `need`
+// cycles past fromSec. Exact within each linear segment (quadratic solve),
+// hold-last beyond the final keyframe.
+function nextBeatCrossing(
+  segs: BeatSeg[],
+  holdB: number,
+  fromSec: number,
+  need = 1,
+) {
+  let u = fromSec;
+  for (const seg of segs) {
+    if (u >= seg.t1) continue;
+    const uu = Math.max(u, seg.t0);
+    const s = (seg.b1 - seg.b0) / Math.max(1e-9, seg.t1 - seg.t0);
+    const bu = seg.b0 + s * (uu - seg.t0);
+    const span = seg.t1 - uu;
+    const cyclesToEnd = bu * span + (s * span * span) / 2;
+    if (cyclesToEnd >= need) {
+      let d: number;
+      if (Math.abs(s) < 1e-12) {
+        d = need / Math.max(1e-6, bu);
+      } else {
+        const disc = bu * bu + 2 * s * need;
+        d =
+          disc > 0 ? (Math.sqrt(disc) - bu) / s : need / Math.max(1e-6, bu);
+        if (!(d > 0)) d = need / Math.max(1e-6, bu);
+      }
+      return uu + d;
+    }
+    need -= Math.max(0, cyclesToEnd);
+    u = seg.t1;
+  }
+  return u + need / Math.max(1e-6, holdB);
+}
+
 export function createAudioEngine(getSession: () => EntrainSessionV1) {
   let ctx: AudioContext | null = null;
   let graph: Graph | null = null;
@@ -216,6 +293,9 @@ export function createAudioEngine(getSession: () => EntrainSessionV1) {
     }
     const carrier = clamp(layerCarrierAt(l, offsetSec / 60), 20, 2000);
     if (l.type === "binaural" || l.type === "monaural") {
+      // Each oscillator's frequency is a linear ramp; WebAudio oscillators
+      // accumulate phase from instantaneous frequency, so the L/R difference
+      // phase equals the exact beat integral — already chirp-free.
       const a = ctx.createOscillator(),
         b = ctx.createOscillator();
       a.type = b.type = l.wave || "sine";
@@ -290,7 +370,21 @@ export function createAudioEngine(getSession: () => EntrainSessionV1) {
       return { node: layerGain, stops };
     }
     const lfo = ctx.createOscillator();
-    lfo.type = l.type === "iso-hard" ? "square" : "sine";
+    if (l.type === "iso-hard") {
+      // square(sin) is +1 just after phase 0 → pulse ON at each integer
+      // beat crossing, matching the stage's iso-hard envelope.
+      lfo.type = "square";
+    } else {
+      // iso-smooth: −cos so the envelope is 0.5·(1 − cos 2πφ) — zero at
+      // integer crossings, exactly the curve the stage draws. Plain sin
+      // would put pulse onsets a quarter cycle off the sweep jumps.
+      lfo.setPeriodicWave(
+        ctx.createPeriodicWave(
+          new Float32Array([0, -1]),
+          new Float32Array([0, 0]),
+        ),
+      );
+    }
     scheduleParam(
       lfo.frequency,
       l.keyframes,
@@ -479,6 +573,10 @@ export function createAudioEngine(getSession: () => EntrainSessionV1) {
         stops.push(...out.stops);
       }
     }
+    // Safety limiter only. NOTE: keep MIX.limiterThresholdDb well above the
+    // normal program level — a compressor that engages between isochronic
+    // pulses pumps and erodes the modulation depth, which is the whole
+    // point of the signal.
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = MIX.limiterThresholdDb;
     comp.knee.value = 0;
@@ -539,7 +637,10 @@ export function createAudioEngine(getSession: () => EntrainSessionV1) {
       const built = build(ctx, ctx.destination, {
         live: true,
         durSec: liveSec,
-        fadeSec: session.export?.fadeSec || 0,
+        // Live start uses a fixed short ramp; the export fade (which can be
+        // many seconds) applies to WAV renders only. Inheriting it here made
+        // pressing Start feel dead for fadeSec=4 sessions.
+        fadeSec: 0.8,
         loopPattern: !!opts?.loopPattern,
         offsetSec: opts?.offsetSec || 0,
         delaySec: opts?.delaySec || 0,
@@ -593,6 +694,21 @@ export function createAudioEngine(getSession: () => EntrainSessionV1) {
         graph.offsetSec + Math.max(0, graph.ctx.currentTime - graph.startedAt);
       return graph.loopPattern ? raw : Math.min(raw, graph.patternSec);
     },
+    // Pattern position of what is AUDIBLE right now: audio-clock position
+    // minus device output latency. Drive the beat sweep with this — it
+    // starts at 0 exactly when sound reaches the ears and cannot lead or
+    // lag by the scheduling delay the way a wall-clock anchor does.
+    visualPositionSec() {
+      if (!graph) return 0;
+      const c: any = graph.ctx;
+      const lat = Number(c.outputLatency ?? c.baseLatency ?? 0) || 0;
+      const raw =
+        graph.offsetSec + (graph.ctx.currentTime - lat - graph.startedAt);
+      const clamped = Math.max(0, raw);
+      return graph.loopPattern
+        ? clamped
+        : Math.min(clamped, graph.patternSec);
+    },
     async loadSample(layerId: string, file: File) {
       ctx = ctx || new AudioContext();
       samples.set(layerId, await ctx.decodeAudioData(await file.arrayBuffer()));
@@ -630,8 +746,12 @@ export function createAudioEngine(getSession: () => EntrainSessionV1) {
       if (!graph) return;
       const r = canvas.getBoundingClientRect(),
         d = devicePixelRatio || 1;
-      canvas.width = r.width * d;
-      canvas.height = r.height * d;
+      const wpx = Math.round(r.width * d),
+        hpx = Math.round(r.height * d);
+      if (canvas.width !== wpx || canvas.height !== hpx) {
+        canvas.width = wpx;
+        canvas.height = hpx;
+      }
       const x = canvas.getContext("2d")!;
       x.setTransform(d, 0, 0, d, 0, 0);
       const arr = new Uint8Array(graph.analyser.fftSize);
@@ -756,6 +876,11 @@ function trapPulseValue(
   return 0;
 }
 
+// Pulse-per-pulse trap gate stepping on EXACT integer crossings of the beat
+// phase integral (see nextBeatCrossing). Every pulse onset therefore lands
+// on the same instant as the visual sweep's slot jump — the naive
+// nextT += 1/beat Euler stepping this replaces drifted by
+// (slope/2)·∫dt/beat cycles over a glide.
 function scheduleTrapGate(
   param: AudioParam,
   l: EntrainLayerV1,
@@ -767,17 +892,27 @@ function scheduleTrapGate(
   cleanups: Array<() => void> = [],
 ) {
   const cfg = l.isoPulse || { edgeMs: 8, duty: 0.45 };
+  const { segs, holdB } = beatSegments(l);
+  const off0 = Math.max(0, offsetSec);
   const beat0 = Math.max(
     0.001,
-    sampleTimeline(l.keyframes, "beatHz", offsetSec / 60),
+    sampleTimeline(l.keyframes, "beatHz", off0 / 60),
   );
+  // Initial value: fractional part of the exact integral at the offset,
+  // rendered through the local pulse period.
+  const cyc0 = beatCyclesUpTo(segs, holdB, off0);
+  const frac0 = cyc0 - Math.floor(cyc0);
   const period0 = 1 / beat0;
-  const phase0 = ((Math.max(0, offsetSec) % period0) + period0) % period0;
   param.setValueAtTime(
-    trapPulseValue(phase0, period0, cfg.edgeMs, cfg.duty),
+    trapPulseValue(frac0 * period0, period0, cfg.edgeMs, cfg.duty),
     start,
   );
-  let nextT = start + (phase0 > 0.0005 ? period0 - phase0 : 0);
+  // First upcoming crossing (pattern time), converted to context time.
+  let nextT =
+    start +
+    (frac0 > 1e-4
+      ? Math.max(0, nextBeatCrossing(segs, holdB, off0, 1 - frac0) - off0)
+      : 0);
 
   const scheduleOne = (at: number) => {
     if (at >= stopAt - 0.001) return;
@@ -788,14 +923,16 @@ function scheduleTrapGate(
       param.setValueAtTime(0, at);
       return;
     }
-    const period = 1 / clamp(beat, 0.05, 80);
-    const curve = makeTrapCurve(period, cfg.edgeMs, cfg.duty);
+    // Exact inter-pulse interval: time until the integral gains one cycle.
+    const nextPattern = nextBeatCrossing(segs, holdB, patternSec, 1);
+    const interval = clamp(nextPattern - patternSec, 1 / 80, 20);
+    const curve = makeTrapCurve(interval, cfg.edgeMs, cfg.duty);
     try {
-      param.setValueCurveAtTime(curve, Math.max(start, at), period);
+      param.setValueCurveAtTime(curve, Math.max(start, at), interval);
     } catch {
       param.setValueAtTime(0, Math.max(start, at));
     }
-    nextT = at + period;
+    nextT = at + interval;
   };
 
   const scheduleUntil = (horizonAbs: number, maxPulses = 250000) => {
@@ -820,6 +957,33 @@ function scheduleTrapGate(
     scheduleUntil(now + LOOKAHEAD_SEC, 5000);
   }, 5000);
   cleanups.push(() => clearInterval(timer));
+}
+
+// Karplus buffers are expensive (lenSec × sampleRate synthesis per pluck).
+// A pluck stream needs variation, not uniqueness — cycle 8 cached variants
+// per (freq, seed, decay, brightness, dur, sampleRate) instead of building
+// a fresh 6-second buffer for every scheduled pluck.
+const KARPLUS_VARIANTS = 8;
+const karplusCache = new Map<string, AudioBuffer>();
+
+function karplusPooled(
+  ctx: BaseAudioContext,
+  freq: number,
+  seed: number,
+  index: number,
+  decay: number,
+  brightness: number,
+  lenSec: number,
+) {
+  const variant = index % KARPLUS_VARIANTS;
+  const key = `${ctx.sampleRate}:${freq.toFixed(2)}:${seed}:${variant}:${decay}:${brightness}:${lenSec}`;
+  let buf = karplusCache.get(key);
+  if (!buf) {
+    if (karplusCache.size > 96) karplusCache.clear();
+    buf = karplusBuffer(ctx, freq, seed + variant * 101, decay, brightness, lenSec);
+    karplusCache.set(key, buf);
+  }
+  return buf;
 }
 
 function buildKarplusLayer(
@@ -847,10 +1011,11 @@ function buildKarplusLayer(
   let i = 0;
   const scheduleOne = (at: number, index: number) => {
     if (at + dur <= start || at >= stopAt) return;
-    const buf = karplusBuffer(
+    const buf = karplusPooled(
       ctx,
       freq,
-      (l.seed || 4242) + index * 101,
+      l.seed || 4242,
+      index,
       cfg.decay || 0.996,
       cfg.brightness ?? 0.5,
       dur,
@@ -950,7 +1115,19 @@ function additiveLoopBuffer(
     1,
     partials.reduce((s, p) => s + Math.max(0, p.gain || 0), 0),
   );
-  const slowHz = snapToLoopHz(0.07, lenSec);
+  const slowW = 2 * Math.PI * snapToLoopHz(0.07, lenSec);
+  // Hoist per-partial angular frequencies out of the sample loop — the pow
+  // and grid snap were being recomputed len × partials times per channel.
+  const parts = partials.map((part) => {
+    const cents = Math.pow(2, (part.detuneCents || 0) / 1200);
+    return {
+      w:
+        2 *
+        Math.PI *
+        snapToLoopHz(baseHz * Math.max(0.05, part.ratio || 1) * cents, lenSec),
+      g: Math.max(0, part.gain || 0) / totalGain,
+    };
+  });
   for (let ch = 0; ch < 2; ch++) {
     const d = buf.getChannelData(ch);
     const phaseOffset = ch ? Math.PI * 0.37 : 0;
@@ -964,16 +1141,10 @@ function additiveLoopBuffer(
       b6 = 0;
     for (let i = 0; i < len; i++) {
       const t = i / ctx.sampleRate;
-      const slow = Math.sin(2 * Math.PI * slowHz * t + phaseOffset) * 0.5 + 0.5;
+      const slow = Math.sin(slowW * t + phaseOffset) * 0.5 + 0.5;
       let v = 0;
-      for (const part of partials) {
-        const cents = Math.pow(2, (part.detuneCents || 0) / 1200);
-        const f = snapToLoopHz(
-          baseHz * Math.max(0.05, part.ratio || 1) * cents,
-          lenSec,
-        );
-        v +=
-          Math.sin(2 * Math.PI * f * t + phaseOffset) * (part.gain / totalGain);
+      for (const part of parts) {
+        v += Math.sin(part.w * t + phaseOffset) * part.g;
       }
       let mask = 0;
       if (opts.rain) {
@@ -1103,6 +1274,7 @@ function proceduralAmbience(
   const lenSec = 10;
   const len = Math.floor(ctx.sampleRate * lenSec),
     buf = ctx.createBuffer(2, len, ctx.sampleRate);
+  const humW = 2 * Math.PI * snapToLoopHz(55, lenSec); // hoisted from the loop
   for (let ch = 0; ch < 2; ch++) {
     const d = buf.getChannelData(ch);
     const rnd = lcg(seed + ch * 1013904223);
@@ -1120,10 +1292,7 @@ function proceduralAmbience(
       const w = rnd() * 2 - 1;
       if (recipe === "brown-room") {
         last = (last + 0.018 * w) / 1.018;
-        d[i] =
-          last * 2.8 +
-          Math.sin(2 * Math.PI * snapToLoopHz(55, lenSec) * t + phaseOffset) *
-            0.02;
+        d[i] = last * 2.8 + Math.sin(humW * t + phaseOffset) * 0.02;
       } else {
         b0 = 0.99886 * b0 + w * 0.0555179;
         b1 = 0.99332 * b1 + w * 0.0750759;

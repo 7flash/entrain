@@ -32,6 +32,17 @@ import {
 // (tMin durationMin). All values glide linearly between them.
 // Hierarchy: Play/Stop outermost, then Import and Export (modals), then the
 // layer stack, then the selected layer's editor. Nothing else.
+//
+// CONTROL BINDING NOTE (framework-proof forms):
+// tradjs sets JSX props as DOM attributes. Attributes are only DEFAULTS for
+// form controls — <select value> does not exist in HTML at all, <textarea>
+// takes its text as children, and a user-dirtied <input> ignores attribute
+// updates. Two rules keep every control truthful:
+//   1. every stateful control carries data-val; syncControlValues() writes
+//      the value PROPERTY after each render (and marks <option selected>).
+//   2. editor handlers never trust closures — they resolve selectedLayer()
+//      at event time, so a stale listener on a reused DOM node can never
+//      write into a different layer.
 
 let session: EntrainSessionV1 = defaultSession();
 let engine = createAudioEngine(() => session);
@@ -84,7 +95,6 @@ function App() {
   const headphones = session.layers.some(
     (l) => l.type === "binaural" && !l.mute,
   );
-  const primary = primaryBeatLayer();
   return (
     <div className="studio-shell">
       <div className="studio-stage">
@@ -93,11 +103,7 @@ function App() {
           {fmtClock(0)} / {fmtClock(session.durationMin * 60)}
         </span>
         <span className="readout r mono" id="studio-live">
-          {primary
-            ? `${bandForHz(seVal(primary, "beatHz", "start"))} · ${describeLayer(primary)}`
-            : session.layers.length
-              ? "ambience only"
-              : ""}
+          {sel ? liveLabel(sel, 0) : ""}
         </span>
         <span className="readout b mono">
           {session.layers.length} layers ·{" "}
@@ -113,9 +119,10 @@ function App() {
           <input
             className="name-input"
             value={session.name}
+            data-val={session.name}
             onInput={(e: any) => {
               session.name = e.currentTarget.value;
-              repaint();
+              scheduleLocalAutosave();
             }}
           />
           <div className="small">
@@ -144,7 +151,9 @@ function App() {
       {session.layers.length ? (
         <>
           <Stack />
-          {sel ? <LayerEditor l={sel} /> : null}
+          {sel ? (
+            <LayerEditor l={sel} key={`${sel.id}:${sel.type}`} />
+          ) : null}
         </>
       ) : (
         <EmptyGuide />
@@ -154,6 +163,24 @@ function App() {
       {modal === "export" ? <ExportModal /> : null}
     </div>
   );
+}
+
+// The stage visualizes THE SELECTED LAYER — the same one being edited.
+// Layers with neither beat nor carrier (ambience, noise, samples) fall back
+// to the engine's real waveform scope.
+function stageLayer() {
+  const l = selectedLayer();
+  if (!l) return null;
+  return l;
+}
+function liveLabel(l: EntrainLayerV1, tMin: number) {
+  if (isNoBeat(l) && isNoCarrier(l))
+    return `${layerShortLabel(l)} · gain ${Math.round(sampleTimelineSafe(l, "gainPct", tMin))}%`;
+  if (isNoBeat(l))
+    return `carrier ${Math.round(sampleTimelineSafe(l, "carrierHz", tMin))} Hz`;
+  const b = sampleTimelineSafe(l, "beatHz", tMin);
+  const c = sampleTimelineSafe(l, "carrierHz", tMin);
+  return `${bandForHz(b)} · beat ${b.toFixed(2)} Hz · carrier ${Math.round(c)} Hz`;
 }
 
 // ─── stack: layer rows + add, duration on the scale ──────────────────────────
@@ -170,6 +197,7 @@ function Stack() {
             min="1"
             max="180"
             value={String(session.durationMin)}
+            data-val={String(session.durationMin)}
             onInput={(e: any) => {
               session.durationMin = clampNum(
                 Number(e.currentTarget.value),
@@ -223,7 +251,9 @@ function StackRow({
           className={"act tiny " + (l.mute ? "warn" : "")}
           title="Mute"
           onClick={() => {
-            l.mute = !l.mute;
+            const x = byId(l.id);
+            if (!x) return;
+            x.mute = !x.mute;
             repaint(true);
           }}
         >
@@ -232,7 +262,7 @@ function StackRow({
         <button
           className={"act tiny " + (l.solo ? "primary" : "")}
           title="Solo (exclusive)"
-          onClick={() => toggleSolo(l)}
+          onClick={() => toggleSolo(l.id)}
         >
           S
         </button>
@@ -256,7 +286,12 @@ function StackRow({
   );
 }
 
-function toggleSolo(l: EntrainLayerV1) {
+function byId(id: string) {
+  return session.layers.find((x) => x.id === id) || null;
+}
+function toggleSolo(id: string) {
+  const l = byId(id);
+  if (!l) return;
   const next = !l.solo;
   session.layers.forEach((x) => {
     x.solo = false;
@@ -266,8 +301,14 @@ function toggleSolo(l: EntrainLayerV1) {
 }
 
 // ─── layer editor: one type select, Start | End grid, advanced ───────────────
+// All handlers resolve the CURRENT selected layer at event time (never the
+// render-time closure) — see the control binding note at the top.
 
-function LayerEditor({ l }: { l: EntrainLayerV1 }) {
+function cur(): EntrainLayerV1 | null {
+  return selectedLayer();
+}
+
+function LayerEditor({ l }: { l: EntrainLayerV1; key?: string }) {
   const index = session.layers.findIndex((x) => x.id === l.id);
   const missingSample = l.type === "sample" && !engine.hasSample(l.id);
   return (
@@ -278,14 +319,16 @@ function LayerEditor({ l }: { l: EntrainLayerV1 }) {
         </span>
         <select
           className="type-select"
-          value={l.type}
+          data-val={l.type}
           onChange={(e: any) => {
-            changeType(l, e.currentTarget.value as LayerType);
+            const c = cur();
+            if (!c) return;
+            changeType(c, e.currentTarget.value as LayerType);
             repaint(true);
           }}
         >
           {ALL_TYPES.map((t) => (
-            <option value={t} key={t}>
+            <option value={t} selected={t === l.type} key={t}>
               {layerTypeLabel(t)}
             </option>
           ))}
@@ -297,7 +340,10 @@ function LayerEditor({ l }: { l: EntrainLayerV1 }) {
         <button
           className="act tiny editor-dup"
           title="Duplicate layer"
-          onClick={() => duplicateLayer(l.id)}
+          onClick={() => {
+            const c = cur();
+            if (c) duplicateLayer(c.id);
+          }}
         >
           Dup
         </button>
@@ -351,15 +397,19 @@ function LayerEditor({ l }: { l: EntrainLayerV1 }) {
             <div className="field">
               <label>Wave</label>
               <select
-                value={l.wave || "sine"}
+                data-val={l.wave || "sine"}
                 onChange={(e: any) => {
-                  l.wave = e.currentTarget.value;
+                  const c = cur();
+                  if (!c) return;
+                  c.wave = e.currentTarget.value;
                   repaint(true);
                 }}
               >
-                <option value="sine">sine</option>
-                <option value="triangle">triangle</option>
-                <option value="sawtooth">sawtooth</option>
+                {["sine", "triangle", "sawtooth"].map((wv) => (
+                  <option value={wv} selected={wv === (l.wave || "sine")} key={wv}>
+                    {wv}
+                  </option>
+                ))}
               </select>
             </div>
           ) : null}
@@ -368,15 +418,23 @@ function LayerEditor({ l }: { l: EntrainLayerV1 }) {
             <div className="field">
               <label>Noise color</label>
               <select
-                value={l.noiseColor || "pink"}
+                data-val={l.noiseColor || "pink"}
                 onChange={(e: any) => {
-                  l.noiseColor = e.currentTarget.value;
+                  const c = cur();
+                  if (!c) return;
+                  c.noiseColor = e.currentTarget.value;
                   repaint(true);
                 }}
               >
-                <option value="white">white</option>
-                <option value="pink">pink</option>
-                <option value="brown">brown</option>
+                {["white", "pink", "brown"].map((nc) => (
+                  <option
+                    value={nc}
+                    selected={nc === (l.noiseColor || "pink")}
+                    key={nc}
+                  >
+                    {nc}
+                  </option>
+                ))}
               </select>
             </div>
           ) : null}
@@ -396,8 +454,11 @@ function LayerEditor({ l }: { l: EntrainLayerV1 }) {
                 max="1"
                 step="0.01"
                 value={String(l.pan || 0)}
+                data-val={String(l.pan || 0)}
                 onInput={(e: any) => {
-                  l.pan = Number(e.currentTarget.value);
+                  const c = cur();
+                  if (!c) return;
+                  c.pan = Number(e.currentTarget.value);
                   repaint(true);
                 }}
               />
@@ -419,11 +480,14 @@ function LayerEditor({ l }: { l: EntrainLayerV1 }) {
                 max="0.25"
                 step="0.005"
                 value={String(l.panMotion?.rateHz || 0)}
+                data-val={String(l.panMotion?.rateHz || 0)}
                 onInput={(e: any) => {
+                  const c = cur();
+                  if (!c) return;
                   const rateHz = Number(e.currentTarget.value);
-                  l.panMotion =
+                  c.panMotion =
                     rateHz > 0
-                      ? { rateHz, depth: l.panMotion?.depth ?? 0.35 }
+                      ? { rateHz, depth: c.panMotion?.depth ?? 0.35 }
                       : undefined;
                   repaint(true);
                 }}
@@ -442,9 +506,12 @@ function LayerEditor({ l }: { l: EntrainLayerV1 }) {
                 max="1"
                 step="0.01"
                 value={String(l.panMotion?.depth || 0.35)}
+                data-val={String(l.panMotion?.depth || 0.35)}
                 onInput={(e: any) => {
-                  l.panMotion = {
-                    rateHz: l.panMotion?.rateHz || 0.03,
+                  const c = cur();
+                  if (!c) return;
+                  c.panMotion = {
+                    rateHz: c.panMotion?.rateHz || 0.03,
                     depth: Number(e.currentTarget.value),
                   };
                   repaint(true);
@@ -489,9 +556,11 @@ function SERow({
           max={String(max)}
           step={String(step)}
           value={String(s)}
-          onInput={(ev: any) =>
-            setSE(l, keyName, "start", Number(ev.currentTarget.value))
-          }
+          data-val={String(s)}
+          onInput={(ev: any) => {
+            const c = cur();
+            if (c) setSE(c, keyName, "start", Number(ev.currentTarget.value));
+          }}
         />
         <b className="mono">
           {fmtNum(s)}
@@ -505,9 +574,11 @@ function SERow({
           max={String(max)}
           step={String(step)}
           value={String(e)}
-          onInput={(ev: any) =>
-            setSE(l, keyName, "end", Number(ev.currentTarget.value))
-          }
+          data-val={String(e)}
+          onInput={(ev: any) => {
+            const c = cur();
+            if (c) setSE(c, keyName, "end", Number(ev.currentTarget.value));
+          }}
         />
         <b className="mono">
           {fmtNum(e)}
@@ -521,7 +592,10 @@ function SERow({
             ? "Tied: moving one slider moves both. Click to untie."
             : "Untied: start and end move independently. Click to tie."
         }
-        onClick={() => toggleTie(l, keyName)}
+        onClick={() => {
+          const c = cur();
+          if (c) toggleTie(c, keyName);
+        }}
       >
         =
       </button>
@@ -549,11 +623,13 @@ function ImportModal() {
           className="modal-textarea mono"
           rows="8"
           placeholder="-- SBaGen script, https://…#es…, capsule, or { … } JSON"
-          value={importText}
+          data-val={importText}
           onInput={(e: any) => {
             importText = e.currentTarget.value;
           }}
-        />
+        >
+          {importText}
+        </textarea>
         <div className="modal-actions">
           <button className="act primary" onClick={doImport}>
             Replace current session
@@ -571,7 +647,12 @@ function ImportModal() {
 }
 
 function ExportModal() {
-  const sbagen = sessionToSbagenText(session);
+  let sbagen = "";
+  try {
+    sbagen = sessionToSbagenText(session);
+  } catch (e: any) {
+    sbagen = `-- could not generate SBaGen: ${e?.message || e}`;
+  }
   return (
     <div className="modal-backdrop" onClick={backdropClose}>
       <div className="modal modal-wide">
@@ -591,7 +672,14 @@ function ExportModal() {
               copy
             </button>
           </label>
-          <textarea className="modal-textarea mono" rows="7" readOnly value={sbagen} />
+          <textarea
+            className="modal-textarea mono"
+            rows="7"
+            readOnly
+            data-val={sbagen}
+          >
+            {sbagen}
+          </textarea>
         </div>
         <div className="field">
           <label>
@@ -610,6 +698,7 @@ function ExportModal() {
             className="mono"
             readOnly
             value={exportInfo ? exportInfo.url : "encoding…"}
+            data-val={exportInfo ? exportInfo.url : "encoding…"}
           />
           {exportInfo ? (
             <span className="small mono">
@@ -637,38 +726,47 @@ function ExportModal() {
               max="30"
               step="1"
               value={String(session.export?.fadeSec ?? 4)}
+              data-val={String(session.export?.fadeSec ?? 4)}
               onInput={(e: any) => {
                 session.export = {
                   ...(session.export || {}),
                   fadeSec: Number(e.currentTarget.value || 0),
                 };
                 refreshExportUrl();
-                repaint();
               }}
             />
           </div>
           <div className="field">
             <label>Sample rate</label>
             <select
-              value={String(session.export?.sampleRate || 44100)}
+              data-val={String(session.export?.sampleRate || 44100)}
               onChange={(e: any) => {
                 session.export = {
                   ...(session.export || {}),
                   sampleRate: Number(e.currentTarget.value),
                 };
                 refreshExportUrl();
-                repaint();
               }}
             >
-              <option value="32000">32 kHz</option>
-              <option value="44100">44.1 kHz</option>
-              <option value="48000">48 kHz</option>
+              {[
+                ["32000", "32 kHz"],
+                ["44100", "44.1 kHz"],
+                ["48000", "48 kHz"],
+              ].map(([v, label]) => (
+                <option
+                  value={v}
+                  selected={v === String(session.export?.sampleRate || 44100)}
+                  key={v}
+                >
+                  {label}
+                </option>
+              ))}
             </select>
           </div>
           <div className="field">
             <label>Beyond pattern</label>
             <select
-              value={session.loop?.mode || "hold-last"}
+              data-val={session.loop?.mode || "hold-last"}
               onChange={(e: any) => {
                 session.loop = {
                   ...(session.loop || {}),
@@ -678,14 +776,28 @@ function ExportModal() {
                 repaint(true);
               }}
             >
-              <option value="hold-last">hold final values</option>
-              <option value="repeat">repeat pattern</option>
-              <option value="crossfade-repeat">crossfade repeat</option>
+              {[
+                ["hold-last", "hold final values"],
+                ["repeat", "repeat pattern"],
+                ["crossfade-repeat", "crossfade repeat"],
+              ].map(([v, label]) => (
+                <option
+                  value={v}
+                  selected={v === (session.loop?.mode || "hold-last")}
+                  key={v}
+                >
+                  {label}
+                </option>
+              ))}
             </select>
           </div>
         </div>
         <div className="modal-actions">
-          <button className="act primary" disabled={exportBusy} onClick={exportWav}>
+          <button
+            className="act primary"
+            disabled={exportBusy}
+            onClick={exportWav}
+          >
             {exportBusy ? "Rendering…" : "↓ Download WAV"}
           </button>
           <button className="act" onClick={exportJson}>
@@ -835,7 +947,8 @@ function EmptyGuide() {
           <li>
             During playback, lock your gaze on the jumping line in the stage —
             it steps to a new position on every beat, computed from the exact
-            same glide the audio follows.
+            same glide the audio follows. The stage always shows the layer you
+            are editing.
           </li>
           <li>
             <b>Export</b> gives you the SBaGen script, a private share URL, and
@@ -867,8 +980,12 @@ function IsoTrapControls({ l }: { l: EntrainLayerV1 }) {
           max="40"
           step="1"
           value={String(cfg.edgeMs)}
+          data-val={String(cfg.edgeMs)}
           onInput={(e: any) => {
-            l.isoPulse = { ...cfg, edgeMs: Number(e.currentTarget.value) };
+            const c = cur();
+            if (!c) return;
+            const cc = c.isoPulse || { edgeMs: 8, duty: 0.45 };
+            c.isoPulse = { ...cc, edgeMs: Number(e.currentTarget.value) };
             repaint(true);
           }}
         />
@@ -883,8 +1000,12 @@ function IsoTrapControls({ l }: { l: EntrainLayerV1 }) {
           max="0.9"
           step="0.01"
           value={String(cfg.duty)}
+          data-val={String(cfg.duty)}
           onInput={(e: any) => {
-            l.isoPulse = { ...cfg, duty: Number(e.currentTarget.value) };
+            const c = cur();
+            if (!c) return;
+            const cc = c.isoPulse || { edgeMs: 8, duty: 0.45 };
+            c.isoPulse = { ...cc, duty: Number(e.currentTarget.value) };
             repaint(true);
           }}
         />
@@ -894,22 +1015,35 @@ function IsoTrapControls({ l }: { l: EntrainLayerV1 }) {
 }
 
 function ProceduralControls({ l }: { l: EntrainLayerV1 }) {
+  const recipes = [
+    "rain",
+    "pink-rain",
+    "brown-room",
+    "bowl-drone",
+    "heavy-rain-bowls",
+  ];
   return (
     <>
       <div className="field">
         <label>Ambience recipe</label>
         <select
-          value={l.ambienceRecipe || "pink-rain"}
+          data-val={l.ambienceRecipe || "pink-rain"}
           onChange={(e: any) => {
-            l.ambienceRecipe = e.currentTarget.value;
+            const c = cur();
+            if (!c) return;
+            c.ambienceRecipe = e.currentTarget.value;
             repaint(true);
           }}
         >
-          <option value="rain">rain</option>
-          <option value="pink-rain">pink rain</option>
-          <option value="brown-room">brown room</option>
-          <option value="bowl-drone">bowl drone</option>
-          <option value="heavy-rain-bowls">heavy rain + bowls</option>
+          {recipes.map((r) => (
+            <option
+              value={r}
+              selected={r === (l.ambienceRecipe || "pink-rain")}
+              key={r}
+            >
+              {r.replace(/-/g, " ")}
+            </option>
+          ))}
         </select>
       </div>
       <div className="field">
@@ -918,8 +1052,11 @@ function ProceduralControls({ l }: { l: EntrainLayerV1 }) {
           type="number"
           min="1"
           value={String(l.seed || 1337)}
+          data-val={String(l.seed || 1337)}
           onInput={(e: any) => {
-            l.seed = Number(e.currentTarget.value || 1);
+            const c = cur();
+            if (!c) return;
+            c.seed = Number(e.currentTarget.value || 1);
             repaint(true);
           }}
         />
@@ -943,19 +1080,21 @@ function AdditiveControls({ l }: { l: EntrainLayerV1 }) {
       <div className="field">
         <label>Partial preset</label>
         <select
-          value="custom"
+          data-val="custom"
           onChange={(e: any) => {
+            const c = cur();
+            if (!c) return;
             const v = e.currentTarget.value;
-            if (v === "bowl") l.partials = bowlPartialsUi();
+            if (v === "bowl") c.partials = bowlPartialsUi();
             if (v === "organ")
-              l.partials = [
+              c.partials = [
                 { ratio: 1, gain: 1 },
                 { ratio: 2, gain: 0.45 },
                 { ratio: 3, gain: 0.25 },
                 { ratio: 4, gain: 0.14 },
               ];
             if (v === "glass")
-              l.partials = [
+              c.partials = [
                 { ratio: 1, gain: 1 },
                 { ratio: 2.76, gain: 0.46, decaySec: 22 },
                 { ratio: 5.4, gain: 0.24, decaySec: 18 },
@@ -964,7 +1103,9 @@ function AdditiveControls({ l }: { l: EntrainLayerV1 }) {
             repaint(true);
           }}
         >
-          <option value="custom">custom/current</option>
+          <option value="custom" selected>
+            custom/current
+          </option>
           <option value="bowl">singing bowl</option>
           <option value="organ">organ pad</option>
           <option value="glass">glass bell</option>
@@ -974,17 +1115,21 @@ function AdditiveControls({ l }: { l: EntrainLayerV1 }) {
         <label>Partials JSON</label>
         <textarea
           rows="3"
-          value={partialText}
+          data-val={partialText}
           onChange={(e: any) => {
+            const c = cur();
+            if (!c) return;
             try {
-              l.partials = JSON.parse(e.currentTarget.value);
+              c.partials = JSON.parse(e.currentTarget.value);
               notice = "partials updated";
             } catch {
               notice = "partials JSON is invalid";
             }
             repaint(true);
           }}
-        />
+        >
+          {partialText}
+        </textarea>
       </div>
       <div className="field">
         <label>
@@ -996,11 +1141,12 @@ function AdditiveControls({ l }: { l: EntrainLayerV1 }) {
           max="30000"
           step="50"
           value={String(env.attackMs)}
+          data-val={String(env.attackMs)}
           onChange={(e: any) => {
-            l.envelope = {
-              ...env,
-              attackMs: Number(e.currentTarget.value || 0),
-            };
+            const c = cur();
+            if (!c) return;
+            const ce = c.envelope || env;
+            c.envelope = { ...ce, attackMs: Number(e.currentTarget.value || 0) };
             repaint(true);
           }}
         />
@@ -1015,9 +1161,13 @@ function AdditiveControls({ l }: { l: EntrainLayerV1 }) {
           max="120000"
           step="100"
           value={String(env.releaseMs)}
+          data-val={String(env.releaseMs)}
           onChange={(e: any) => {
-            l.envelope = {
-              ...env,
+            const c = cur();
+            if (!c) return;
+            const ce = c.envelope || env;
+            c.envelope = {
+              ...ce,
               releaseMs: Number(e.currentTarget.value || 0),
             };
             repaint(true);
@@ -1035,6 +1185,13 @@ function KarplusControls({ l }: { l: EntrainLayerV1 }) {
     brightness: 0.55,
     durationSec: 6,
   };
+  const upd = (patch: any) => {
+    const c = cur();
+    if (!c) return;
+    const cc = c.karplus || cfg;
+    c.karplus = { ...cc, ...patch };
+    repaint(true);
+  };
   return (
     <>
       <div className="field">
@@ -1043,8 +1200,11 @@ function KarplusControls({ l }: { l: EntrainLayerV1 }) {
           type="number"
           min="1"
           value={String(l.seed || 4242)}
+          data-val={String(l.seed || 4242)}
           onInput={(e: any) => {
-            l.seed = Number(e.currentTarget.value || 1);
+            const c = cur();
+            if (!c) return;
+            c.seed = Number(e.currentTarget.value || 1);
             repaint(true);
           }}
         />
@@ -1062,10 +1222,8 @@ function KarplusControls({ l }: { l: EntrainLayerV1 }) {
           max="20"
           step="0.01"
           value={String(cfg.rateHz)}
-          onInput={(e: any) => {
-            l.karplus = { ...cfg, rateHz: Number(e.currentTarget.value) };
-            repaint(true);
-          }}
+          data-val={String(cfg.rateHz)}
+          onInput={(e: any) => upd({ rateHz: Number(e.currentTarget.value) })}
         />
       </div>
       <div className="field">
@@ -1078,10 +1236,8 @@ function KarplusControls({ l }: { l: EntrainLayerV1 }) {
           max="0.9999"
           step="0.0001"
           value={String(cfg.decay)}
-          onInput={(e: any) => {
-            l.karplus = { ...cfg, decay: Number(e.currentTarget.value) };
-            repaint(true);
-          }}
+          data-val={String(cfg.decay)}
+          onInput={(e: any) => upd({ decay: Number(e.currentTarget.value) })}
         />
       </div>
       <div className="field">
@@ -1094,10 +1250,10 @@ function KarplusControls({ l }: { l: EntrainLayerV1 }) {
           max="1"
           step="0.01"
           value={String(cfg.brightness)}
-          onInput={(e: any) => {
-            l.karplus = { ...cfg, brightness: Number(e.currentTarget.value) };
-            repaint(true);
-          }}
+          data-val={String(cfg.brightness)}
+          onInput={(e: any) =>
+            upd({ brightness: Number(e.currentTarget.value) })
+          }
         />
       </div>
       <div className="field">
@@ -1110,13 +1266,10 @@ function KarplusControls({ l }: { l: EntrainLayerV1 }) {
           max="30"
           step="0.5"
           value={String(cfg.durationSec)}
-          onChange={(e: any) => {
-            l.karplus = {
-              ...cfg,
-              durationSec: Number(e.currentTarget.value || 6),
-            };
-            repaint(true);
-          }}
+          data-val={String(cfg.durationSec)}
+          onChange={(e: any) =>
+            upd({ durationSec: Number(e.currentTarget.value || 6) })
+          }
         />
       </div>
     </>
@@ -1127,6 +1280,15 @@ function SampleControls({ l }: { l: EntrainLayerV1 }) {
   const loop =
     l.sampleLoop ||
     ({ mode: "native", startSec: 0, endSec: 0, crossfadeSec: 3 } as any);
+  const updLoop = (patch: any) => {
+    const c = cur();
+    if (!c) return;
+    const cl =
+      c.sampleLoop ||
+      ({ mode: "native", startSec: 0, endSec: 0, crossfadeSec: 3 } as any);
+    c.sampleLoop = { ...cl, ...patch };
+    repaint(true);
+  };
   return (
     <>
       <div className="field">
@@ -1134,20 +1296,23 @@ function SampleControls({ l }: { l: EntrainLayerV1 }) {
         <input
           type="file"
           accept="audio/*"
-          onChange={(e: any) => loadSample(l.id, e.currentTarget.files?.[0])}
+          onChange={(e: any) => {
+            const c = cur();
+            if (c) loadSample(c.id, e.currentTarget.files?.[0]);
+          }}
         />
       </div>
       <div className="field">
         <label>Loop mode</label>
         <select
-          value={loop.mode || "native"}
-          onChange={(e: any) => {
-            l.sampleLoop = { ...loop, mode: e.currentTarget.value };
-            repaint(true);
-          }}
+          data-val={loop.mode || "native"}
+          onChange={(e: any) => updLoop({ mode: e.currentTarget.value })}
         >
-          <option value="native">native</option>
-          <option value="crossfade">crossfade</option>
+          {["native", "crossfade"].map((m) => (
+            <option value={m} selected={m === (loop.mode || "native")} key={m}>
+              {m}
+            </option>
+          ))}
         </select>
       </div>
       <div className="field">
@@ -1157,13 +1322,10 @@ function SampleControls({ l }: { l: EntrainLayerV1 }) {
           min="0"
           step="0.1"
           value={String(loop.startSec || 0)}
-          onInput={(e: any) => {
-            l.sampleLoop = {
-              ...loop,
-              startSec: Number(e.currentTarget.value || 0),
-            };
-            repaint(true);
-          }}
+          data-val={String(loop.startSec || 0)}
+          onInput={(e: any) =>
+            updLoop({ startSec: Number(e.currentTarget.value || 0) })
+          }
         />
       </div>
       <div className="field">
@@ -1173,13 +1335,10 @@ function SampleControls({ l }: { l: EntrainLayerV1 }) {
           min="0"
           step="0.1"
           value={String(loop.endSec || 0)}
-          onInput={(e: any) => {
-            l.sampleLoop = {
-              ...loop,
-              endSec: Number(e.currentTarget.value || 0),
-            };
-            repaint(true);
-          }}
+          data-val={String(loop.endSec || 0)}
+          onInput={(e: any) =>
+            updLoop({ endSec: Number(e.currentTarget.value || 0) })
+          }
         />
       </div>
       {loop.mode === "crossfade" ? (
@@ -1191,13 +1350,10 @@ function SampleControls({ l }: { l: EntrainLayerV1 }) {
             max="30"
             step="0.1"
             value={String(loop.crossfadeSec || 3)}
-            onInput={(e: any) => {
-              l.sampleLoop = {
-                ...loop,
-                crossfadeSec: Number(e.currentTarget.value || 0),
-              };
-              repaint(true);
-            }}
+            data-val={String(loop.crossfadeSec || 3)}
+            onInput={(e: any) =>
+              updLoop({ crossfadeSec: Number(e.currentTarget.value || 0) })
+            }
           />
         </div>
       ) : null}
@@ -1344,12 +1500,6 @@ function afterSessionLoad(baseNotice: string) {
 
 // ─── derived / pure helpers ──────────────────────────────────────────────────
 
-function primaryBeatLayer() {
-  return (
-    session.layers.find((l) => !l.mute && !isNoBeat(l)) ||
-    session.layers.find((l) => !isNoBeat(l))
-  );
-}
 function layerColor(hz: number, type: LayerType) {
   if (type === "noise" || type === "sample" || type === "procedural-ambience")
     return "#5d6d87";
@@ -1511,7 +1661,7 @@ function addLayer() {
   repaint(true);
 }
 function duplicateLayer(id: string) {
-  const l = session.layers.find((x) => x.id === id);
+  const l = byId(id);
   if (!l) return;
   const copy: EntrainLayerV1 = {
     ...JSON.parse(JSON.stringify(l)),
@@ -1535,7 +1685,7 @@ function removeLayer(id: string) {
 async function loadSample(id: string, file?: File) {
   if (!file) return;
   await engine.loadSample(id, file);
-  const l = session.layers.find((x) => x.id === id);
+  const l = byId(id);
   if (l) l.sampleName = file.name;
   notice = `loaded ${file.name}`;
   repaint(true);
@@ -1772,20 +1922,22 @@ function scheduleEngineRebuild() {
   }, 160);
 }
 
-// Stage params: the primary layer's exact linear glide. The sweep is driven
-// by wall-clock time anchored at playback start, so N jumps per second is
-// true by construction — if audible pulses drift off the line, the audio
-// engine has a phase bug, not the renderer.
+// Stage params: THE SELECTED LAYER's exact linear glide — the stage always
+// visualizes the layer being edited. The sweep is driven by wall-clock time
+// anchored at playback start, so N jumps per second is true by construction;
+// if audible pulses drift off the line, the audio engine has a phase bug,
+// not the renderer.
 function stageParams(elapsedSec: number): BeatScopeParams | null {
-  const l = primaryBeatLayer() || session.layers.find((x) => !isNoCarrier(x));
+  const l = stageLayer();
   if (!l) return null;
+  if (isNoBeat(l) && isNoCarrier(l)) return null; // ambience → engine scope
   const tMin = elapsedSec / 60;
   return {
     type: l.type,
     beatStartHz: isNoBeat(l) ? 0 : seVal(l, "beatHz", "start"),
     beatEndHz: isNoBeat(l) ? 0 : seVal(l, "beatHz", "end"),
     durationSec: session.durationMin * 60,
-    carrierHz: sampleTimelineSafe(l, "carrierHz", tMin),
+    carrierHz: isNoCarrier(l) ? 0 : sampleTimelineSafe(l, "carrierHz", tMin),
     gainPct: sampleTimelineSafe(l, "gainPct", tMin),
     duty: l.isoPulse?.duty,
     edgeMs: l.isoPulse?.edgeMs,
@@ -1820,14 +1972,9 @@ function syncLiveReadouts() {
   const ph = document.getElementById("tl-playhead") as HTMLElement | null;
   if (ph && engine.running && session.durationMin > 0)
     ph.style.left = `${Math.min(100, Math.max(0, (elapsed / (session.durationMin * 60)) * 100))}%`;
-  const primary = primaryBeatLayer();
-  const live = document.getElementById("studio-live");
-  if (live && primary) {
-    const b = sampleTimelineSafe(primary, "beatHz", tMin);
-    const c = sampleTimelineSafe(primary, "carrierHz", tMin);
-    live.textContent = `${bandForHz(b)} · beat ${b.toFixed(2)} Hz · carrier ${Math.round(c)} Hz`;
-  }
   const sel = selectedLayer();
+  const live = document.getElementById("studio-live");
+  if (live && sel) live.textContent = liveLabel(sel, tMin);
   const now = document.getElementById("se-now");
   if (now && sel) {
     const parts: string[] = [];
@@ -1911,10 +2058,23 @@ function makePortableCopy() {
 
 // ─── render loop & lifecycle ─────────────────────────────────────────────────
 
+// Force form-control PROPERTIES to match state after every render. Attributes
+// only set defaults; a dirtied input or a reused select keeps its old value
+// otherwise. Cheap: one query + string compare per control.
+function syncControlValues() {
+  document
+    .querySelectorAll<HTMLElement>("[data-val]")
+    .forEach((el: any) => {
+      const v = el.getAttribute("data-val") ?? "";
+      if (el.value !== v) el.value = v;
+    });
+}
+
 function repaint(rebuild = false) {
   if (rebuild && engine.running) scheduleEngineRebuild();
   scheduleLocalAutosave();
   render(<App />, document.getElementById("studio-root")!);
+  syncControlValues();
   if (!engine.running)
     requestAnimationFrame(() => {
       if (!engine.running) paintStage(0); // idle preview: Start values
@@ -1985,6 +2145,7 @@ export default async function mount() {
   booting = false;
   addEventListener("keydown", onStudioKey);
   render(<App />, document.getElementById("studio-root")!);
+  syncControlValues();
   requestAnimationFrame(() => paintStage(0));
   scheduleLocalAutosave();
   return () => {

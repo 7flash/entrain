@@ -12,11 +12,6 @@ export default function RootLayout({ children }: { children: any }) {
       <body>
         <style data-entrain-global-body>{GLOBAL_CSS}</style>
         <div className="wrap">
-          <nav className="nav">
-            <a className="brand" href="/">
-              ENTRAIN<b>·studio</b>
-            </a>
-          </nav>
           {children}
         </div>
       </body>
