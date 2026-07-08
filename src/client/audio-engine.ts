@@ -6,6 +6,10 @@ import {
   type EntrainSessionV1,
   type Keyframe,
 } from "@/format/entrain-format";
+import {
+  connectTransauralMatrix,
+  transauralConfigFromSession,
+} from "@/client/transaural";
 
 const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 const safeName = (s: string) =>
@@ -319,12 +323,24 @@ export function createAudioEngine(getSession: () => EntrainSessionV1) {
         gb = ctx.createGain();
       ga.gain.value = gb.gain.value = 0.5;
       if (l.type === "binaural") {
-        const m = ctx.createChannelMerger(2);
-        a.connect(ga);
-        ga.connect(m, 0, 0);
-        b.connect(gb);
-        gb.connect(m, 0, 1);
-        m.connect(layerGain);
+        const spatial = transauralConfigFromSession(getSession());
+        if (spatial.spatialMode === "transaural") {
+          a.connect(ga);
+          b.connect(gb);
+          connectTransauralMatrix(ctx, ga, gb, layerGain, spatial);
+        } else if (spatial.spatialMode === "monaural") {
+          a.connect(ga);
+          b.connect(gb);
+          ga.connect(input);
+          gb.connect(input);
+        } else {
+          const m = ctx.createChannelMerger(2);
+          a.connect(ga);
+          ga.connect(m, 0, 0);
+          b.connect(gb);
+          gb.connect(m, 0, 1);
+          m.connect(layerGain);
+        }
       } else {
         a.connect(ga);
         b.connect(gb);

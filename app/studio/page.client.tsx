@@ -27,6 +27,13 @@ import {
   type SharePayloadInfo,
 } from "@/client/session-codec";
 import { sbagenExportWarnings } from "@/format/sbagen";
+import {
+  DEFAULT_TRANSAURAL,
+  setSessionSpatialMode,
+  transauralConfigFromSession,
+  transauralSummary,
+  type SpatialOutputMode,
+} from "@/client/transaural";
 
 // ─── module state ────────────────────────────────────────────────────────────
 // Model: every layer has EXACTLY TWO keyframes — Start (tMin 0) and End
@@ -94,9 +101,6 @@ const selectedLayer = () =>
 
 function App() {
   const sel = selectedLayer();
-  const headphones = session.layers.some(
-    (l) => l.type === "binaural" && !l.mute,
-  );
   return (
     <div className="studio-shell">
       <div className="studio-stage">
@@ -108,8 +112,7 @@ function App() {
           {sel ? liveLabel(sel, 0) : ""}
         </span>
         <span className="readout b mono">
-          {session.layers.length} layers ·{" "}
-          {headphones ? "headphones" : "speakers ok"}
+          {session.layers.length} layers · {transauralSummary(session)}
         </span>
         <span className="readout br mono" id="studio-state">
           {status}
@@ -140,6 +143,62 @@ function App() {
         <button className="act primary play" onClick={toggle}>
           {engine.running ? "■ Stop" : "▶ Start"}
         </button>
+        <select
+          className="act"
+          title="Binaural output mode"
+          data-val={session.playback?.spatialMode || "headphones"}
+          onChange={(e: any) => setOutputMode(e.currentTarget.value)}
+        >
+          {[
+            ["headphones", "Headphones / raw"],
+            ["transaural", "Transaural speakers"],
+            ["monaural", "Monaural fallback"],
+          ].map(([v, label]) => (
+            <option
+              value={v}
+              selected={v === (session.playback?.spatialMode || "headphones")}
+              key={v}
+            >
+              {label}
+            </option>
+          ))}
+        </select>
+        {(session.playback?.spatialMode || "headphones") === "transaural" ? (
+          <>
+            <label className="mini-field mono">
+              τ
+              <input
+                type="number"
+                min="40"
+                max="480"
+                step="1"
+                data-val={String(transauralConfigFromSession(session).tauUs)}
+                value={String(transauralConfigFromSession(session).tauUs)}
+                onInput={(e: any) =>
+                  setTransauralParam("tauUs", e.currentTarget.value)
+                }
+              />
+            </label>
+            <label className="mini-field mono">
+              g
+              <input
+                type="number"
+                min="0.30"
+                max="0.97"
+                step="0.01"
+                data-val={String(
+                  transauralConfigFromSession(session).crosstalkGain,
+                )}
+                value={String(
+                  transauralConfigFromSession(session).crosstalkGain,
+                )}
+                onInput={(e: any) =>
+                  setTransauralParam("crosstalkGain", e.currentTarget.value)
+                }
+              />
+            </label>
+          </>
+        ) : null}
         <span className="transport-spacer" />
         <button className="act" onClick={openImport}>
           Import
@@ -839,6 +898,29 @@ function ExportModal() {
                 <option
                   value={v}
                   selected={v === (session.loop?.mode || "hold-last")}
+                  key={v}
+                >
+                  {label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field">
+            <label>Playback mode in URLs/widgets</label>
+            <select
+              data-val={session.playback?.spatialMode || "headphones"}
+              onChange={(e: any) => setOutputMode(e.currentTarget.value)}
+            >
+              {[
+                ["headphones", "headphones / raw stereo"],
+                ["transaural", "transaural speakers"],
+                ["monaural", "monaural fallback"],
+              ].map(([v, label]) => (
+                <option
+                  value={v}
+                  selected={
+                    v === (session.playback?.spatialMode || "headphones")
+                  }
                   key={v}
                 >
                   {label}
@@ -1939,6 +2021,30 @@ function applyStarter(kind: "carrier" | "countable" | "buzz" | "descent") {
   }
   engine = createAudioEngine(() => session);
   afterSessionLoad(notice);
+  repaint(true);
+}
+
+function setOutputMode(mode: SpatialOutputMode) {
+  setSessionSpatialMode(session, mode);
+  notice = transauralSummary(session);
+  refreshExportUrl();
+  repaint(true);
+}
+function setTransauralParam(key: "tauUs" | "crosstalkGain", value: any) {
+  session.playback = {
+    ...(session.playback || {}),
+    spatialMode: "transaural",
+    transaural: {
+      ...DEFAULT_TRANSAURAL,
+      ...(session.playback?.transaural || {}),
+      [key]:
+        key === "tauUs"
+          ? Number(value || DEFAULT_TRANSAURAL.tauUs)
+          : Number(value || DEFAULT_TRANSAURAL.crosstalkGain),
+    },
+  };
+  notice = transauralSummary(session);
+  refreshExportUrl();
   repaint(true);
 }
 

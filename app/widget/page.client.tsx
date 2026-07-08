@@ -19,6 +19,11 @@ import {
   decodeSessionHash,
   encodeSourceUrl,
 } from "@/client/session-codec";
+import {
+  setSessionSpatialMode,
+  transauralSummary,
+  type SpatialOutputMode,
+} from "@/client/transaural";
 
 let session: EntrainSessionV1 = { ...defaultSession(), layers: [] };
 let engine = createAudioEngine(() => session);
@@ -61,9 +66,6 @@ function App() {
     );
   }
   const layer = stageLayer();
-  const headphones = session.layers.some(
-    (l) => l.type === "binaural" && !l.mute,
-  );
   return (
     <div className="widget-card">
       <div className="widget-stage">
@@ -75,8 +77,7 @@ function App() {
           {layer ? liveLabel(layer, 0) : "no layers"}
         </span>
         <span className="widget-readout b mono">
-          {session.layers.length} layers ·{" "}
-          {headphones ? "headphones" : "speakers ok"}
+          {session.layers.length} layers · {transauralSummary(session)}
         </span>
         <span className="widget-readout br mono" id="widget-state">
           {engine.running ? "playing" : "ready"}
@@ -99,6 +100,34 @@ function App() {
             </div>
           </div>
           <div className="widget-controls">
+            <select
+              className="widget-btn"
+              title="Binaural output mode"
+              data-val={session.playback?.spatialMode || "headphones"}
+              onChange={(e: any) => setOutputMode(e.currentTarget.value)}
+            >
+              <option
+                value="headphones"
+                selected={
+                  (session.playback?.spatialMode || "headphones") ===
+                  "headphones"
+                }
+              >
+                Headphones
+              </option>
+              <option
+                value="transaural"
+                selected={session.playback?.spatialMode === "transaural"}
+              >
+                Transaural
+              </option>
+              <option
+                value="monaural"
+                selected={session.playback?.spatialMode === "monaural"}
+              >
+                Monaural
+              </option>
+            </select>
             <button className="widget-btn primary" onClick={toggle}>
               {engine.running ? "Pause" : "Play"}
             </button>
@@ -114,6 +143,18 @@ function App() {
       </div>
     </div>
   );
+}
+
+function setOutputMode(mode: SpatialOutputMode) {
+  const wasRunning = engine.running;
+  const offset = elapsedSec();
+  setSessionSpatialMode(session, mode);
+  message = transauralSummary(session);
+  engine.stop();
+  engine = createAudioEngine(() => session);
+  engine.setVolume?.(volume);
+  paint();
+  if (wasRunning) void play(offset);
 }
 
 async function play(offsetSec = 0) {
@@ -215,6 +256,10 @@ function updateReadouts() {
 }
 function paint() {
   render(<App />, document.getElementById("widget-root")!);
+  document.querySelectorAll<HTMLElement>("[data-val]").forEach((el: any) => {
+    const v = el.getAttribute("data-val") || "";
+    if (el.value !== v) el.value = v;
+  });
   requestAnimationFrame(() => paintCanvas(elapsedSec()));
 }
 

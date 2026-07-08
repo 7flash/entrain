@@ -40,6 +40,16 @@ export type IsoPulseConfig = {
 };
 export type TemplateTier = "free" | "holder" | "pro" | "collector";
 export type SessionLoopMode = "repeat" | "hold-last" | "crossfade-repeat";
+export type SpatialOutputMode = "headphones" | "transaural" | "monaural";
+export type TransauralSettingsV1 = {
+  tauUs: number;
+  crosstalkGain: number;
+  firTaps?: number;
+};
+export type SessionPlaybackV1 = {
+  spatialMode: SpatialOutputMode;
+  transaural?: TransauralSettingsV1;
+};
 
 export const BEAT_LAYER_TYPES: LayerType[] = [
   "binaural",
@@ -218,6 +228,7 @@ export type EntrainSessionV1 = {
   layers: EntrainLayerV1[];
   loop?: { mode: SessionLoopMode; crossfadeSec?: number };
   export?: { fadeSec?: number; sampleRate?: number };
+  playback?: SessionPlaybackV1;
   notes?: string;
 };
 
@@ -267,6 +278,10 @@ export function defaultSession(): EntrainSessionV1 {
     name: "Untitled session",
     durationMin: 20,
     loop: { mode: "hold-last", crossfadeSec: 0 },
+    playback: {
+      spatialMode: "headphones",
+      transaural: { tauUs: 260, crosstalkGain: 0.9, firTaps: 6 },
+    },
     layers: [
       {
         id: rid("alpha"),
@@ -313,6 +328,7 @@ export function sanitizeSession(input: any): EntrainSessionV1 {
     durationMin,
     layers,
     loop: sanitizeLoop(s.loop),
+    playback: sanitizePlayback(s.playback),
     export: {
       fadeSec: clampNum(s.export?.fadeSec ?? 4, 0, 30),
       sampleRate: [32000, 44100, 48000].includes(Number(s.export?.sampleRate))
@@ -501,6 +517,22 @@ function sanitizeSampleLoop(loop: any): SampleLoopV1 {
       0,
       30,
     ),
+  };
+}
+
+function sanitizePlayback(playback: any): SessionPlaybackV1 {
+  const modes: SpatialOutputMode[] = ["headphones", "transaural", "monaural"];
+  const spatialMode: SpatialOutputMode = modes.includes(playback?.spatialMode)
+    ? playback.spatialMode
+    : "headphones";
+  const t = playback?.transaural || {};
+  return {
+    spatialMode,
+    transaural: {
+      tauUs: Math.round(clampNum(t.tauUs ?? 260, 40, 480)),
+      crosstalkGain: clampNum(t.crosstalkGain ?? 0.9, 0.3, 0.97),
+      firTaps: Math.round(clampNum(t.firTaps ?? 6, 2, 12)),
+    },
   };
 }
 
